@@ -1,7 +1,6 @@
 package pipeline_test
 
 import (
-	"runtime/debug"
 	"testing"
 	"time"
 
@@ -10,20 +9,24 @@ import (
 )
 
 func checkPending[T any](t *testing.T, ch <-chan T) {
+	t.Helper()
+
 	select {
 	case <-ch:
-		t.Fatalf("signal is not in a pending state:\n\n%s", debug.Stack())
+		t.Fatalf("signal is not in a pending state")
 	default:
 		// success
 	}
 }
 
 func checkSignaled[T any](t *testing.T, ch <-chan T) {
+	t.Helper()
+
 	select {
 	case <-ch:
 		// success
 	case <-time.After(time.Second):
-		t.Fatalf("channel is not in a signaled state:\n\n%s", debug.Stack())
+		t.Fatalf("channel is not in a signaled state")
 	}
 }
 
