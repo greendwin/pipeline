@@ -18,7 +18,7 @@ func withTimeout(t *testing.T, context string, cb func()) {
 		finished.Set()
 	}()
 
-	if !finished.WaitFor(time.Second) {
+	if !finished.TryWait(time.Second) {
 		t.Fatalf("%s: timeout", context)
 	}
 }

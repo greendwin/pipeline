@@ -14,7 +14,17 @@ func (sig Signal) Wait() {
 	<-sig
 }
 
-func (sig Signal) WaitFor(d time.Duration) bool {
+func (sig Signal) TryWait(d time.Duration) bool {
+	if d == 0 {
+		// don't allocate if no timeout
+		select {
+		case <-sig:
+			return true
+		default:
+			return false
+		}
+	}
+
 	select {
 	case <-sig:
 		return true
@@ -44,6 +54,6 @@ func (sig SignalMut) Wait() {
 	sig.Signal().Wait()
 }
 
-func (sig SignalMut) WaitFor(d time.Duration) bool {
-	return sig.Signal().WaitFor(d)
+func (sig SignalMut) TryWait(d time.Duration) bool {
+	return sig.Signal().TryWait(d)
 }
