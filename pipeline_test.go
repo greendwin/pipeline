@@ -2,39 +2,54 @@ package pipeline_test
 
 import (
 	"errors"
-	"runtime/debug"
 	"testing"
+	"time"
 
 	pl "github.com/greendwin/pipeline"
 	"github.com/stretchr/testify/assert"
 )
 
-func withTimeout(t *testing.T, cb func()) {
+func withTimeout(t *testing.T, context string, cb func()) {
+	t.Helper()
+
 	finished := pl.NewSignal()
 	go func() {
 		cb()
 		finished.Set()
 	}()
-	checkSignaled(t, finished)
+
+	if !finished.WaitFor(time.Second) {
+		t.Fatalf("%s: timeout", context)
+	}
 }
 
 func checkShutdown(t *testing.T, pp *pl.Pipeline) {
-	withTimeout(t, func() {
+	t.Helper()
+
+	withTimeout(t, "pipline shutdown", func() {
 		pp.Shutdown()
 	})
 }
 
 func checkRead[T any](t *testing.T, ch <-chan T) T {
-	res := make(chan T, 1)
-	withTimeout(t, func() {
-		v, ok := <-ch
-		if !ok {
-			t.Fatalf("channel was unexpectedly closed:\n\n%s", debug.Stack())
-		}
+	t.Helper()
 
-		res <- v
+	type result struct {
+		val T
+		ok  bool
+	}
+
+	chres := make(chan result, 1)
+	withTimeout(t, "read channel", func() {
+		v, ok := <-ch
+		chres <- result{v, ok}
 	})
-	return <-res
+
+	r := <-chres
+	if !r.ok {
+		t.Fatalf("channel was unexpectedly closed")
+	}
+	return r.val
 }
 
 func TestPipelineGo(t *testing.T) {
@@ -88,6 +103,7 @@ func TestPipelineGoErr(t *testing.T) {
 	checkPending(t, cherr)
 
 	exit.Set()
+
 	err := checkRead(t, cherr)
 	assert.Equal(t, err, testError)
 }

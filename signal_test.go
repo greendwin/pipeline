@@ -54,7 +54,7 @@ func TestSignalWait(t *testing.T) {
 }
 
 func TestSignalWaitFor(t *testing.T) {
-	withTimeout(t, func() {
+	withTimeout(t, "wait signaled", func() {
 		sig := pl.NewSignal()
 		sig.Set()
 
@@ -62,7 +62,7 @@ func TestSignalWaitFor(t *testing.T) {
 		assert.True(t, r)
 	})
 
-	withTimeout(t, func() {
+	withTimeout(t, "wait for signal timeout", func() {
 		sig := pl.NewSignal()
 		r := sig.WaitFor(10 * time.Millisecond)
 		assert.False(t, r)
