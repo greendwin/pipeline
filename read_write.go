@@ -9,12 +9,12 @@ func Write[T any](pp *Pipeline, out chan<- T, val T) bool {
 	}
 }
 
-func Read[T any](pp *Pipeline, in <-chan T) (v T, ok bool) {
+func Read[T any](pp *Pipeline, in <-chan T) (val T, ok bool) {
 	select {
-	case v, ok = <-in:
-		return v, ok
+	case val, ok = <-in:
+		return
 	case <-pp.done:
-		var empty T
-		return empty, false
+		ok = false // for clarity
+		return
 	}
 }

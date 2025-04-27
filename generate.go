@@ -24,3 +24,13 @@ func Generate[T any](pp *Pipeline, cb func(Writer[T])) <-chan T {
 
 	return out.ch
 }
+
+func GenerateErr[T any](pp *Pipeline, cb func(Writer[T]) error) (<-chan T, Oneshot[error]) {
+	out := channel[T]{pp, make(chan T)}
+	cherr := pp.GoErr(func() error {
+		defer close(out.ch)
+		return cb(&out)
+	})
+
+	return out.ch, cherr
+}
