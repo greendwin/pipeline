@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func sequence(pp *pl.Pipeline, count int) <-chan int {
+func sequence(pp *pl.Pipeline, start, count int) <-chan int {
 	return pl.Generate(pp, func(wr pl.Writer[int]) {
 		for k := range count {
-			if !wr.Write(k) {
+			if !wr.Write(start + k) {
 				return
 			}
 		}
@@ -22,7 +22,7 @@ func TestTransform(t *testing.T) {
 	pp := pl.NewPipeline()
 	defer checkShutdown(t, pp)
 
-	seq := sequence(pp, 10)
+	seq := sequence(pp, 0, 10)
 	seqAdd5 := pl.Transform(pp, 1, seq, func(x int) int {
 		return x + 5
 	})
@@ -83,7 +83,7 @@ func TestTransformErr(t *testing.T) {
 	pp := pl.NewPipeline()
 	defer checkShutdown(t, pp)
 
-	seq := sequence(pp, 10)
+	seq := sequence(pp, 0, 10)
 	seqAdd5, cherr := pl.TransformErr(pp, 1, seq, func(x int) (int, error) {
 		return x + 5, nil
 	})

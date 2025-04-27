@@ -31,7 +31,7 @@ func TestProcess(t *testing.T) {
 
 	sum := adder{}
 
-	seq := sequence(pp, 10)
+	seq := sequence(pp, 0, 10)
 	finished := pl.Process(pp, 1, seq, func(x int) {
 		sum.Add(x)
 	})
@@ -77,7 +77,7 @@ func TestProcessErr(t *testing.T) {
 
 	sum := adder{}
 
-	seq := sequence(pp, 10)
+	seq := sequence(pp, 0, 10)
 	finished, cherr := pl.ProcessErr(pp, 1, seq, func(x int) error {
 		sum.Add(x)
 		return nil
