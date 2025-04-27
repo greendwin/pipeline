@@ -11,7 +11,7 @@ type Oneshot[T any] <-chan T
 // track spawned goroutines and gracefully shutdown full network
 type Pipeline struct {
 	wg   sync.WaitGroup
-	done signalMut
+	done SignalMut
 }
 
 func NewPipeline() *Pipeline {
@@ -23,7 +23,7 @@ func NewPipeline() *Pipeline {
 // stop entire pipeline
 // make sure that all waiting goroutines are unblocked and exited
 func (pp *Pipeline) Shutdown() {
-	close(pp.done)
+	pp.done.Set()
 	pp.wg.Wait()
 }
 
