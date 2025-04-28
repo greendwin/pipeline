@@ -44,16 +44,16 @@ func (sig SignalMut) Set() {
 	close(sig)
 }
 
-func (sig SignalMut) Signal() Signal {
+func (sig SignalMut) Chan() Signal {
 	return chan None(sig)
 }
 
 // redeclare that same methods for `mut` version
 
 func (sig SignalMut) Wait() {
-	sig.Signal().Wait()
+	sig.Chan().Wait()
 }
 
 func (sig SignalMut) TryWait(d time.Duration) bool {
-	return sig.Signal().TryWait(d)
+	return sig.Chan().TryWait(d)
 }
