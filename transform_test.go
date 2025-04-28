@@ -154,7 +154,7 @@ func TestTransformErrPropagate(t *testing.T) {
 
 	tr, cherr := pl.TransformErr(pp, numWorkers, input, func(x int) (int, error) {
 		doFail.Wait()
-		return 0, testError
+		return 0, errTest
 	})
 
 	withTimeout(t, "receive error", func() {
@@ -165,7 +165,7 @@ func TestTransformErrPropagate(t *testing.T) {
 		doFail.Set()
 
 		err := checkRead(t, cherr)
-		assert.Equal(t, err, testError)
+		assert.Equal(t, err, errTest)
 	})
 
 	checkPending(t, tr) // nothing was processed, all failed

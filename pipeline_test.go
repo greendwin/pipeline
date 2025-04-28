@@ -84,7 +84,7 @@ func TestPipelineShutdown(t *testing.T) {
 	checkSignaled(t, shutdownFinished)
 }
 
-var testError = errors.New("test")
+var errTest = errors.New("test")
 
 func TestPipelineGoErr(t *testing.T) {
 	pp := pl.NewPipeline()
@@ -96,7 +96,7 @@ func TestPipelineGoErr(t *testing.T) {
 	cherr := pp.GoErr(func() error {
 		started.Set()
 		<-exit
-		return testError
+		return errTest
 	})
 
 	checkSignaled(t, started)
@@ -105,7 +105,7 @@ func TestPipelineGoErr(t *testing.T) {
 	exit.Set()
 
 	err := checkRead(t, cherr)
-	assert.Equal(t, err, testError)
+	assert.Equal(t, err, errTest)
 }
 
 func TestPipelineShutdownGoErr(t *testing.T) {

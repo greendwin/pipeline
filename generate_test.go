@@ -78,7 +78,7 @@ func TestGenerateErrPropagate(t *testing.T) {
 			r := wr.Write(k * k)
 			assert.True(t, r)
 		}
-		return testError
+		return errTest
 	})
 
 	finished := pl.NewSignal()
@@ -92,7 +92,7 @@ func TestGenerateErrPropagate(t *testing.T) {
 	}()
 
 	err := checkRead(t, cherr)
-	assert.Equal(t, err, testError)
+	assert.Equal(t, err, errTest)
 
 	// note: `partial` channel must be closed for this
 	checkSignaled(t, finished)
