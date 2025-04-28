@@ -1,33 +1,30 @@
 package pipeline
 
-// TODO: test me!!!
-
 func Collect[T any](pp *Pipeline, cb func() T) Oneshot[T] {
-	out := make(chan T, 1)
+	out := NewOneshot[T]()
 	pp.wg.Add(1)
 	go func() {
 		defer pp.wg.Done()
-		defer close(out)
-		out <- cb()
+		out.Write(cb())
 	}()
-	return out
+	return out.Chan()
 }
 
 func CollectErr[T any](pp *Pipeline, cb func() (T, error)) (Oneshot[T], Oneshot[error]) {
-	out := make(chan T, 1)
-	cherr := make(chan error, 1)
+	out := NewOneshot[T]()
+	cherr := NewOneshot[error]()
 
 	pp.wg.Add(1)
 	go func() {
 		defer pp.wg.Done()
-		defer close(out)
 		v, err := cb()
 		if err != nil {
-			cherr <- err
-		} else {
-			out <- v
+			cherr.Write(err)
+			return
 		}
+
+		out.Write(v)
 	}()
 
-	return out, cherr
+	return out.Chan(), cherr.Chan()
 }
