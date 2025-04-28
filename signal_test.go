@@ -12,8 +12,12 @@ func checkPending[T any](t *testing.T, ch <-chan T) {
 	t.Helper()
 
 	select {
-	case <-ch:
-		t.Fatalf("signal is not in a pending state")
+	case val, ok := <-ch:
+		if !ok {
+			t.Fatalf("channel was closed")
+		}
+
+		t.Fatalf("channel is not in a pending state (received %v)", val)
 	default:
 		// success
 	}
@@ -32,7 +36,7 @@ func checkSignaled[T any](t *testing.T, ch <-chan T) {
 
 func TestSignal(t *testing.T) {
 	mut := pl.NewSignal()
-	sig := mut.Signal()
+	sig := mut.Chan()
 
 	checkPending(t, mut)
 	checkPending(t, sig)
@@ -49,7 +53,7 @@ func TestSignalWait(t *testing.T) {
 	go func(sig pl.Signal) {
 		sig.Wait()
 		finished.Set()
-	}(mut.Signal())
+	}(mut.Chan())
 
 	checkPending(t, finished)
 	mut.Set()
