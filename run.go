@@ -1,7 +1,5 @@
 package pipeline
 
-// TODO: test me!!!
-
 func Run(pp *Pipeline, cb func()) Signal {
 	finished := NewSignal()
 	pp.wg.Add(1)
@@ -10,9 +8,25 @@ func Run(pp *Pipeline, cb func()) Signal {
 		defer finished.Set()
 		cb()
 	}()
-	return finished.Signal()
+	return finished.Chan()
 }
 
 func RunErr(pp *Pipeline, cb func() error) (Signal, Oneshot[error]) {
-	panic("not implemented")
+	finished := NewSignal()
+	cherr := NewOneshot[error]()
+
+	pp.wg.Add(1)
+	go func() {
+		defer pp.wg.Done()
+		err := cb()
+		if err != nil {
+			// note: `finished` is not triggered in this case
+			cherr.Write(err)
+			return
+		}
+
+		finished.Set()
+	}()
+
+	return finished.Chan(), cherr.Chan()
 }
