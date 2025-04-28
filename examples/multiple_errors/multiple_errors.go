@@ -114,12 +114,11 @@ func main() {
 		}
 	})
 
-	cherr := pl.First(pp, urlsErr, contErr, statsErr, resErr)
-
-	select {
-	case v := <-res:
-		log.Printf("results: %d", v)
-	case err := <-cherr:
+	v, err := pl.ReadErr(pp, res, urlsErr, contErr, statsErr, resErr)
+	if err != nil {
 		log.Printf("**stopping**: %v", err)
+		return
 	}
+
+	log.Printf("results: %d", v)
 }
