@@ -2,7 +2,9 @@ Roadmap
 =======
 
 - [x] `Collect` and `CollectErr` functions
-- [ ] `Run` and `RunErr` functions
-- [ ] finish `multiple_errors` example with random error
+- [x] `Run` and `RunErr` functions
+- [x] finish `multiple_errors` example with random error
+- [x] add tests on `ReadErr`
+- [ ] complete `README.md`
 
-- [ ] Use `context` library for pipeline cancellation
+- [ ] use `context` library for pipeline cancellation
