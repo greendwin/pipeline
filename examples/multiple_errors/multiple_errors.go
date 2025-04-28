@@ -28,7 +28,7 @@ func collect(pp *pl.Pipeline, baseUrl string) <-chan string {
 				continue
 			}
 
-			for k := range 50 {
+			for k := range 10 {
 				if !wr.Write(fmt.Sprintf(url, k)) {
 					return
 				}
@@ -40,7 +40,7 @@ func collect(pp *pl.Pipeline, baseUrl string) <-chan string {
 type content string
 
 func download(url string) content {
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	log.Printf("download %q", url)
 	return content(fmt.Sprintf("<content:%q>", url))
 }
@@ -71,20 +71,14 @@ func main() {
 	cont := pl.Transform(pp, 5, urls, download)
 	stats := pl.Transform(pp, 2, cont, getStats)
 
-	finished := pl.Run(pp, func() (results int) {
+	res := pl.Collect(pp, func() (results int) {
 		for st := range stats {
 			results += int(st)
 		}
 		return
 	})
 
-	results, ok := finished.TryWait(5 * time.Second)
-	if !ok {
-		log.Println("timeout!")
-		return
-	}
-
-	log.Printf("results: %d", results)
+	log.Printf("results: %d", <-res)
 }
 
 // TODO: add random error on each stage
