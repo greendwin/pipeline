@@ -25,7 +25,7 @@ func Process[T any](pp *Pipeline, threads int, in <-chan T, cb func(T)) Signal {
 }
 
 func ProcessErr[T any](pp *Pipeline, threads int, in <-chan T, cb func(T) error) (Signal, Oneshot[error]) {
-	cherr := make(chan error, threads) // each worker can send one error
+	cherr := NewOneshotGroup[error](threads) // each worker can send one error
 
 	var wg sync.WaitGroup
 	wg.Add(threads)
@@ -42,7 +42,7 @@ func ProcessErr[T any](pp *Pipeline, threads int, in <-chan T, cb func(T) error)
 
 				err := cb(v)
 				if err != nil {
-					cherr <- err
+					cherr.Write(err)
 					return
 				}
 			}
@@ -51,7 +51,7 @@ func ProcessErr[T any](pp *Pipeline, threads int, in <-chan T, cb func(T) error)
 
 	finished := signalAfterAll(pp, &wg)
 
-	return finished, cherr
+	return finished, cherr.Chan()
 }
 
 func signalAfterAll(pp *Pipeline, wg *sync.WaitGroup) Signal {

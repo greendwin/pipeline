@@ -45,19 +45,18 @@ func WaitFirst[T any](pp *Pipeline, in ...<-chan T) (T, bool) {
 }
 
 func First[T any](pp *Pipeline, in ...<-chan T) Oneshot[T] {
-	out := make(chan T, 1)
+	out := NewOneshot[T]()
 	pp.wg.Add(1)
 	go func() {
 		defer pp.wg.Done()
 
 		v, ok := WaitFirst(pp, in...)
 		if ok {
-			out <- v
+			out.Write(v)
 		}
-		close(out)
 	}()
 
-	return out
+	return out.Chan()
 }
 
 func FanIn[T any](pp *Pipeline, in ...<-chan T) <-chan T {

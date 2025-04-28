@@ -128,10 +128,6 @@ func TestFirst(t *testing.T) {
 		v, ok := <-res
 		assert.True(t, ok)
 		assert.Equal(t, v, 42)
-
-		// make sure channel is closed
-		_, ok = <-res
-		assert.False(t, ok)
 	})
 }
 func TestFirst_AllClosed(t *testing.T) {
@@ -148,11 +144,7 @@ func TestFirst_AllClosed(t *testing.T) {
 	checkPending(t, res)
 
 	close(willClose2)
-	withTimeout(t, "check channel closed", func() {
-		// make sure channel is closed without value
-		_, ok := <-res
-		assert.False(t, ok)
-	})
+	checkPending(t, res) // still pending, `Oneshot` channels are never closed
 }
 
 func TestFanIn(t *testing.T) {
