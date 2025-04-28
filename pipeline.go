@@ -2,24 +2,7 @@ package pipeline
 
 import (
 	"sync"
-	"time"
 )
-
-// TODO: move to separate file
-
-// TODO: !!! should we close `cherr` channels?
-// TODO: another way: should we close `Oneshot` channels? (non errors?)
-
-// 1-buffered channel with single result
-type Oneshot[T any] <-chan T
-
-func (ch *Oneshot[T]) Wait() (val T, ok bool) {
-	panic("not imeplemented")
-}
-
-func (ch *Oneshot[T]) TryWait(d time.Duration) (val T, ok bool) {
-	panic("not imeplemented")
-}
 
 // pipeline context
 // track spawned goroutines and gracefully shutdown full network
@@ -53,15 +36,15 @@ func (pp *Pipeline) Go(cb func()) {
 
 // spawn goroutine that can fail
 func (pp *Pipeline) GoErr(cb func() error) Oneshot[error] {
-	cherr := make(chan error, 1)
+	cherr := NewOneshot[error]()
 	pp.wg.Add(1)
 	go func() {
 		defer pp.wg.Done()
 
 		err := cb()
 		if err != nil {
-			cherr <- err
+			cherr.Write(err)
 		}
 	}()
-	return cherr
+	return cherr.Chan()
 }
