@@ -32,7 +32,7 @@ func Transform[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(T) 
 
 func TransformErr[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(T) (U, error)) (<-chan U, Oneshot[error]) {
 	out := make(chan U)
-	cherr := make(chan error, threads) // each worker can send one error
+	cherr := NewOneshotGroup[error](threads) // each worker can send one error
 
 	var wg sync.WaitGroup
 	wg.Add(threads)
@@ -49,7 +49,7 @@ func TransformErr[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(
 
 				r, err := cb(v)
 				if err != nil {
-					cherr <- err
+					cherr.Write(err)
 					return
 				}
 
@@ -62,7 +62,7 @@ func TransformErr[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(
 
 	closeAfterAll(pp, &wg, out)
 
-	return out, cherr
+	return out, cherr.Chan()
 }
 
 func closeAfterAll[T any](pp *Pipeline, wg *sync.WaitGroup, ch chan T) {
