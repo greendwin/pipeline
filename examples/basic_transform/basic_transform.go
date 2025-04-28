@@ -45,7 +45,7 @@ func main() {
 	sq := square(pp, 4, nums)
 	finished := printNums(pp, sq)
 
-	if !finished.WaitFor(2 * time.Second) {
+	if !finished.TryWait(2 * time.Second) {
 		log.Println("timeout!")
 	}
 
