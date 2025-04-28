@@ -1,6 +1,9 @@
 package pipeline
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 func Transform[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(T) U) <-chan U {
 	out := make(chan U)
@@ -25,7 +28,7 @@ func Transform[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(T) 
 		})
 	}
 
-	closeAfterAll(pp, &wg, out)
+	closeAfterAll(pp, &wg, nil, out)
 
 	return out
 }
@@ -36,6 +39,8 @@ func TransformErr[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(
 
 	var wg sync.WaitGroup
 	wg.Add(threads)
+
+	hasError := atomic.Bool{}
 
 	for range threads {
 		pp.Go(func() {
@@ -50,6 +55,7 @@ func TransformErr[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(
 				r, err := cb(v)
 				if err != nil {
 					cherr.Write(err)
+					hasError.Store(true)
 					return
 				}
 
@@ -60,16 +66,19 @@ func TransformErr[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(
 		})
 	}
 
-	closeAfterAll(pp, &wg, out)
+	closeAfterAll(pp, &wg, &hasError, out)
 
 	return out, cherr.Chan()
 }
 
-func closeAfterAll[T any](pp *Pipeline, wg *sync.WaitGroup, ch chan T) {
+func closeAfterAll[T any](pp *Pipeline, wg *sync.WaitGroup, hasError *atomic.Bool, ch chan T) {
 	pp.wg.Add(1)
 	go func() {
 		defer pp.wg.Done()
-		defer close(ch)
 		wg.Wait()
+
+		if hasError == nil || !hasError.Load() {
+			close(ch) // don't close channel on error
+		}
 	}()
 }
