@@ -133,7 +133,7 @@ func TestProcessErrPropagate(t *testing.T) {
 
 	finished, cherr := pl.ProcessErr(pp, numWorkers, input, func(x int) error {
 		doFail.Wait()
-		return testError
+		return errTest
 	})
 
 	withTimeout(t, "receive error", func() {
@@ -144,7 +144,7 @@ func TestProcessErrPropagate(t *testing.T) {
 		doFail.Set()
 
 		err := checkRead(t, cherr)
-		assert.Equal(t, err, testError)
+		assert.Equal(t, err, errTest)
 	})
 
 	checkPending(t, finished) // nothing was processed, all failed
