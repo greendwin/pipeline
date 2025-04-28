@@ -4,7 +4,7 @@ import "time"
 
 // marker type that indicates that channel will never send
 type None struct {
-	none struct{}
+	_ struct{}
 }
 
 // two-state channel: `pending` and `closed`
