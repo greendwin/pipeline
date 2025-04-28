@@ -1,6 +1,9 @@
 package pipeline
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 func Process[T any](pp *Pipeline, threads int, in <-chan T, cb func(T)) Signal {
 	var wg sync.WaitGroup
@@ -21,7 +24,7 @@ func Process[T any](pp *Pipeline, threads int, in <-chan T, cb func(T)) Signal {
 		})
 	}
 
-	return signalAfterAll(pp, &wg)
+	return signalAfterAll(pp, &wg, nil)
 }
 
 func ProcessErr[T any](pp *Pipeline, threads int, in <-chan T, cb func(T) error) (Signal, Oneshot[error]) {
@@ -29,6 +32,8 @@ func ProcessErr[T any](pp *Pipeline, threads int, in <-chan T, cb func(T) error)
 
 	var wg sync.WaitGroup
 	wg.Add(threads)
+
+	hasError := atomic.Bool{}
 
 	for range threads {
 		pp.Go(func() {
@@ -43,24 +48,29 @@ func ProcessErr[T any](pp *Pipeline, threads int, in <-chan T, cb func(T) error)
 				err := cb(v)
 				if err != nil {
 					cherr.Write(err)
+					hasError.Store(true)
 					return
 				}
 			}
 		})
 	}
 
-	finished := signalAfterAll(pp, &wg)
+	finished := signalAfterAll(pp, &wg, &hasError)
 
 	return finished, cherr.Chan()
 }
 
-func signalAfterAll(pp *Pipeline, wg *sync.WaitGroup) Signal {
+func signalAfterAll(pp *Pipeline, wg *sync.WaitGroup, hasError *atomic.Bool) Signal {
 	finished := NewSignal()
 	pp.wg.Add(1)
 	go func() {
 		defer pp.wg.Done()
-		defer finished.Set()
 		wg.Wait()
+
+		if hasError == nil || !hasError.Load() {
+			// note: `finished` never triggered in case of error
+			finished.Set()
+		}
 	}()
-	return finished.Signal()
+	return finished.Chan()
 }
