@@ -8,3 +8,4 @@ Roadmap
 - [ ] complete `README.md`
 
 - [ ] use `context` library for pipeline cancellation
+- [ ] make `NewPipeline` optional, allow to use `pipeline` functions without wait groups

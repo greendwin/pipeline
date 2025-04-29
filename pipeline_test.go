@@ -1,12 +1,11 @@
 package pipeline_test
 
 import (
-	"errors"
+	"context"
 	"testing"
 	"time"
 
 	pl "github.com/greendwin/pipeline"
-	"github.com/stretchr/testify/assert"
 )
 
 func withTimeout(t *testing.T, context string, cb func()) {
@@ -23,11 +22,11 @@ func withTimeout(t *testing.T, context string, cb func()) {
 	}
 }
 
-func checkShutdown(t *testing.T, pp *pl.Pipeline) {
+func checkShutdown(t *testing.T, ctx context.Context, cancel context.CancelFunc) {
 	t.Helper()
 
 	withTimeout(t, "pipline shutdown", func() {
-		pp.Shutdown()
+		pl.Shutdown(ctx, cancel)
 	})
 }
 
@@ -52,74 +51,17 @@ func checkRead[T any](t *testing.T, ch <-chan T) T {
 	return r.val
 }
 
-func TestPipelineGo(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
-
-	started := pl.NewSignal()
-	pp.Go(func() {
-		started.Set()
-	})
-
-	checkSignaled(t, started)
-}
-
 func TestPipelineShutdown(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	exit := pl.NewSignal()
-	pp.Go(func() {
+	pl.Go(ctx, func() {
 		<-exit
 	})
 
 	shutdownFinished := pl.NewSignal()
 	go func() {
-		pp.Shutdown()
-		shutdownFinished.Set()
-	}()
-
-	// wait for all spawned goroutines to exit
-	checkPending(t, shutdownFinished)
-	exit.Set()
-	checkSignaled(t, shutdownFinished)
-}
-
-var errTest = errors.New("test")
-
-func TestPipelineGoErr(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
-
-	started := pl.NewSignal()
-	exit := pl.NewSignal()
-
-	cherr := pp.GoErr(func() error {
-		started.Set()
-		<-exit
-		return errTest
-	})
-
-	checkSignaled(t, started)
-	checkPending(t, cherr)
-
-	exit.Set()
-
-	err := checkRead(t, cherr)
-	assert.Equal(t, err, errTest)
-}
-
-func TestPipelineShutdownGoErr(t *testing.T) {
-	pp := pl.NewPipeline()
-
-	exit := pl.NewSignal()
-	pp.GoErr(func() error {
-		<-exit
-		return nil
-	})
-
-	shutdownFinished := pl.NewSignal()
-	go func() {
-		pp.Shutdown()
+		pl.Shutdown(ctx, cancel)
 		shutdownFinished.Set()
 	}()
 
