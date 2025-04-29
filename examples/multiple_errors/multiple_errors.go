@@ -19,8 +19,10 @@ var suffixes = [...]string{
 	"/v1/bar/%d",
 }
 
-func collect(ctx context.Context, baseUrl string) (<-chan string, pipeline.Oneshot[error]) {
-	return pipeline.GenerateErr(ctx, func(wr pipeline.Writer[string]) error {
+func collect(ctx context.Context, baseUrl string) func(pipeline.Writer[string]) error {
+	_ = ctx // `ctx` would have been used in the real collection
+
+	return func(wr pipeline.Writer[string]) error {
 		for _, suf := range suffixes {
 			url := baseUrl + suf
 			if !strings.HasSuffix(url, "%d") {
@@ -42,7 +44,7 @@ func collect(ctx context.Context, baseUrl string) (<-chan string, pipeline.Onesh
 		}
 
 		return nil
-	})
+	}
 }
 
 type content string
@@ -73,6 +75,23 @@ func getStats(cont content) (data statsData, err error) {
 	return
 }
 
+func sumResults(ctx context.Context, stats <-chan statsData) func() (int, error) {
+	return func() (results int, err error) {
+		for {
+			st, ok := pipeline.Read(ctx, stats)
+			if !ok {
+				return
+			}
+
+			if err = tryFail("collect ", st); err != nil {
+				return
+			}
+
+			results += int(st)
+		}
+	}
+}
+
 func tryFail(context ...any) error {
 	if rand.Float32() < 0.005 {
 		return fmt.Errorf("failed: %s", fmt.Sprint(context...))
@@ -90,9 +109,9 @@ func main() {
 		log.Println("shutdown finished")
 	}()
 
-	urls1, urlsErr1 := collect(ctx, "www.foo.com")
-	urls2, urlsErr2 := collect(ctx, "www.bar.com")
-	urls3, urlsErr3 := collect(ctx, "www.quz.com")
+	urls1, urlsErr1 := pipeline.GenerateErr(ctx, collect(ctx, "www.foo.com"))
+	urls2, urlsErr2 := pipeline.GenerateErr(ctx, collect(ctx, "www.bar.com"))
+	urls3, urlsErr3 := pipeline.GenerateErr(ctx, collect(ctx, "www.quz.com"))
 
 	urls := pipeline.FanIn(ctx, urls1, urls2, urls3)
 	urlsErr := pipeline.First(ctx, urlsErr1, urlsErr2, urlsErr3)
@@ -100,20 +119,7 @@ func main() {
 	cont, contErr := pipeline.TransformErr(ctx, 5, urls, download)
 	stats, statsErr := pipeline.TransformErr(ctx, 2, cont, getStats)
 
-	res, resErr := pipeline.CollectErr(ctx, func() (results int, err error) {
-		for {
-			st, ok := pipeline.Read(ctx, stats)
-			if !ok {
-				return
-			}
-
-			if err = tryFail("collect ", st); err != nil {
-				return
-			}
-
-			results += int(st)
-		}
-	})
+	res, resErr := pipeline.CollectErr(ctx, sumResults(ctx, stats))
 
 	v, err := pipeline.ReadErr(ctx, res, urlsErr, contErr, statsErr, resErr)
 	if err != nil {
