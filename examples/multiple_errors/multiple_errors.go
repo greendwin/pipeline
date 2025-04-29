@@ -1,13 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
 	"strings"
 	"time"
 
-	pl "github.com/greendwin/pipeline"
+	"github.com/greendwin/pipeline"
 )
 
 var suffixes = [...]string{
@@ -18,8 +19,8 @@ var suffixes = [...]string{
 	"/v1/bar/%d",
 }
 
-func collect(pp *pl.Pipeline, baseUrl string) (<-chan string, pl.Oneshot[error]) {
-	return pl.GenerateErr(pp, func(wr pl.Writer[string]) error {
+func collect(ctx context.Context, baseUrl string) (<-chan string, pipeline.Oneshot[error]) {
+	return pipeline.GenerateErr(ctx, func(wr pipeline.Writer[string]) error {
 		for _, suf := range suffixes {
 			url := baseUrl + suf
 			if !strings.HasSuffix(url, "%d") {
@@ -82,26 +83,26 @@ func tryFail(context ...any) error {
 func main() {
 	log.SetFlags(log.Ltime)
 
-	pp := pl.NewPipeline()
+	ctx, cancel := pipeline.NewPipeline(context.Background())
 	defer func() {
 		log.Println("shutting down...")
-		pp.Shutdown()
+		pipeline.Shutdown(ctx, cancel)
 		log.Println("shutdown finished")
 	}()
 
-	urls1, urlsErr1 := collect(pp, "www.foo.com")
-	urls2, urlsErr2 := collect(pp, "www.bar.com")
-	urls3, urlsErr3 := collect(pp, "www.quz.com")
+	urls1, urlsErr1 := collect(ctx, "www.foo.com")
+	urls2, urlsErr2 := collect(ctx, "www.bar.com")
+	urls3, urlsErr3 := collect(ctx, "www.quz.com")
 
-	urls := pl.FanIn(pp, urls1, urls2, urls3)
-	urlsErr := pl.First(pp, urlsErr1, urlsErr2, urlsErr3)
+	urls := pipeline.FanIn(ctx, urls1, urls2, urls3)
+	urlsErr := pipeline.First(ctx, urlsErr1, urlsErr2, urlsErr3)
 
-	cont, contErr := pl.TransformErr(pp, 5, urls, download)
-	stats, statsErr := pl.TransformErr(pp, 2, cont, getStats)
+	cont, contErr := pipeline.TransformErr(ctx, 5, urls, download)
+	stats, statsErr := pipeline.TransformErr(ctx, 2, cont, getStats)
 
-	res, resErr := pl.CollectErr(pp, func() (results int, err error) {
+	res, resErr := pipeline.CollectErr(ctx, func() (results int, err error) {
 		for {
-			st, ok := pl.Read(pp, stats)
+			st, ok := pipeline.Read(ctx, stats)
 			if !ok {
 				return
 			}
@@ -114,7 +115,7 @@ func main() {
 		}
 	})
 
-	v, err := pl.ReadErr(pp, res, urlsErr, contErr, statsErr, resErr)
+	v, err := pipeline.ReadErr(ctx, res, urlsErr, contErr, statsErr, resErr)
 	if err != nil {
 		log.Printf("**STOPPING**: %v", err)
 		return
