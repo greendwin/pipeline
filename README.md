@@ -1,58 +1,68 @@
-pipeline
+Pipeline
 ========
 
-Concurrent pipelines building library
+Concurrent computations library
 
-## Description
+This is an educational project that follows the patterns described in [Pipelines and cancellation
+](https://go.dev/blog/pipelines).
 
-This is educational library that follows patterns described in [a blog post](https://go.dev/blog/pipelines).
-
-It allows you to build simple concurrent pipelines that:
-* cleanup spawned goroutines and
-* stop execution in case of an error
+It uses `context` to cancel computations in case of errors. Additionally, it tracks spawned goroutines, so you can be sure that all resources are cleaned up when the pipeline shuts down.
 
 ## Examples
 
-### Pipeline
+There are several examples in the repository:
+* `basic_transform` shows how to create a simple computation pipeline creation with proper cancellation
+* `errors_processing` demonstrates how to handle errors
+* `multiple_errors` shows a more complex example, where each stage may raise an error
 
-TODO: describe pipeline object and `Finish` method
+## Functions
+
+### NewPipeline
+
+Function `NewPipeline` is useful when you want to ensure that all goroutines exit when the pipeline is cancelled.
 
 ```go
-pp := pipeline.NewPipeline()
-defer pp.Finish() // shutdown processing and cleanup resources
+ctx, cancel := pipeline.NewPipeline(context.Background())
+
+// run `cancel` and wait all spawned goroutines to finish
+defer pipeline.Shutdown(ctx, cancel)
 ```
 
+Function `NewPipeline` is optional. You can use all pipeline creation methods without it if you don't need goroutine tracking.
 
-### Generator
 
-Generators are starting point of any pipeline.
+### Generate
+
+Generator is the starting point of any pipeline. The `Generate` function creates a channel for writing generated values.
+
+The method `pipeline.Writer[T].Write` returns `false` if the context is cancelled.
 
 ```go
-sq := pipeline.Generate(pp, func (wr pl.Writer[int]) {
-    for k := range 10 {
-        // write can fail in case of no consumer
+squares := pipeline.Generate(ctx, func (wr pipeline.Writer[int]) {
+    k := 0
+    for {
         if !wr.Write(k * k) {
-            // in this case just stop generation
+            // `ctx` was cancelled
             return
         }
+
+        k += 1
     }
 })
-
-// `pipeline` closes channel for us, so we can use range-for
-for v := range sq {
-    fmt.Println(v)
-}
 ```
+
 
 ### Transform
 
-Generated data can be faned out to worker goroutines and their result is chained to the next channel for further processing.
+The `Transform` function spawns multiple workers and processes input channel in parallel.
+
+Results are unordered.
 
 ```go
-nums := sequence(pp, 100)
+nums := sequence(ctx, 100)
 
 // spawn 4 workers to process generated nums
-percents := pipeline.Transform(pp, 4, nums, func (v int) float32 {
+percents := pipeline.Transform(ctx, 4, nums, func (v int) float32 {
     return v / 100.0
 })
 
@@ -64,14 +74,49 @@ for v := range percents {
 ```
 
 
-### Process
+### Collect
 
-TODO
+Function `Collect` can be used to collect the final results. It accepts a function that returns a result, and returns an oneshot channel so that the final result can be awaited in the next step.
+
+```go
+result := pipeline.Collect(ctx, func () (sum float32) {
+    for {
+        v, ok := pipeline.Read(ctx, percents)
+        if !ok {
+            return sum
+        }
+
+        sum += baseCost * v
+    }
+})
+
+sum, ok := pipeline.Read(ctx, result)
+if ok {
+    log.Println("final sum = ", sum)
+} else {
+    log.Println("timeout!")
+}
+```
 
 
 ### Error handling
 
-TODO
+Each processing function has a fallable version that returns an oneshot error channel in addition to the results.
 
+```go
+contents, contErr := pipeline.TransformErr(ctx, 16, urls, func (url string) ([]byte, error) {
+    // request data...
+})
 
-### Full example
+// process content, e.g. saving it to disk
+finished, procErr := pipeline.Process(ctx, 4, contenst, func(cont []byte) error {
+    // store `cont` to disk...
+})
+
+select {
+case err := <-pipeline.First(ctx, contErr, procErr):
+    log.Println(err)
+case <-finished:
+    log.Println("done.")
+}
+```
