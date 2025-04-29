@@ -1,39 +1,40 @@
 package pipeline
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 )
 
-func Transform[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(T) U) <-chan U {
+func Transform[T any, U any](ctx context.Context, threads int, in <-chan T, cb func(T) U) <-chan U {
 	out := make(chan U)
 
 	var wg sync.WaitGroup
 	wg.Add(threads)
 
 	for range threads {
-		pp.Go(func() {
+		Go(ctx, func() {
 			defer wg.Done()
 
 			for {
-				v, ok := Read(pp, in)
+				v, ok := Read(ctx, in)
 				if !ok {
 					return
 				}
 
-				if !Write(pp, out, cb(v)) {
+				if !Write(ctx, out, cb(v)) {
 					return
 				}
 			}
 		})
 	}
 
-	closeAfterAll(pp, &wg, nil, out)
+	closeAfterAll(ctx, &wg, nil, out)
 
 	return out
 }
 
-func TransformErr[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(T) (U, error)) (<-chan U, Oneshot[error]) {
+func TransformErr[T any, U any](ctx context.Context, threads int, in <-chan T, cb func(T) (U, error)) (<-chan U, Oneshot[error]) {
 	out := make(chan U)
 	cherr := NewOneshotGroup[error](threads) // each worker can send one error
 
@@ -43,11 +44,11 @@ func TransformErr[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(
 	hasError := atomic.Bool{}
 
 	for range threads {
-		pp.Go(func() {
+		Go(ctx, func() {
 			defer wg.Done()
 
 			for {
-				v, ok := Read(pp, in)
+				v, ok := Read(ctx, in)
 				if !ok {
 					return
 				}
@@ -59,22 +60,23 @@ func TransformErr[T any, U any](pp *Pipeline, threads int, in <-chan T, cb func(
 					return
 				}
 
-				if !Write(pp, out, r) {
+				if !Write(ctx, out, r) {
 					return
 				}
 			}
 		})
 	}
 
-	closeAfterAll(pp, &wg, &hasError, out)
+	closeAfterAll(ctx, &wg, &hasError, out)
 
 	return out, cherr.Chan()
 }
 
-func closeAfterAll[T any](pp *Pipeline, wg *sync.WaitGroup, hasError *atomic.Bool, ch chan T) {
-	pp.wg.Add(1)
+func closeAfterAll[T any](ctx context.Context, wg *sync.WaitGroup, hasError *atomic.Bool, ch chan T) {
+	pipelineWg := getWaitGroup(ctx)
+	pipelineWg.Add(1)
 	go func() {
-		defer pp.wg.Done()
+		defer pipelineWg.Done()
 		wg.Wait()
 
 		if hasError == nil || !hasError.Load() {

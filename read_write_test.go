@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -9,34 +10,34 @@ import (
 )
 
 func TestWriteValues(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	recv := make(chan int, 10)
 
 	withTimeout(t, "write values", func() {
 		for k := range cap(recv) {
-			ok := pl.Write(pp, recv, k)
+			ok := pl.Write(ctx, recv, k)
 			assert.True(t, ok)
 		}
 	})
 }
 
 func TestWriteDontStuck(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 	neverRecv := make(chan int)
 
-	pp.Go(func() {
-		ok := pl.Write(pp, neverRecv, 42)
+	pl.Go(ctx, func() {
+		ok := pl.Write(ctx, neverRecv, 42)
 		assert.False(t, ok)
 	})
 
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 }
 
 func TestReadValue(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	vals := make(chan int, 10)
 	for k := range cap(vals) {
@@ -46,45 +47,45 @@ func TestReadValue(t *testing.T) {
 
 	withTimeout(t, "read values", func() {
 		for k := range cap(vals) {
-			v, ok := pl.Read(pp, vals)
+			v, ok := pl.Read(ctx, vals)
 			assert.True(t, ok)
 			assert.Equal(t, v, k)
 		}
 
 		for range 3 {
-			_, ok := pl.Read(pp, vals)
+			_, ok := pl.Read(ctx, vals)
 			assert.False(t, ok)
 		}
 	})
 }
 
 func TestReadNeverStuck(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	neverSend := make(chan int)
 
 	finished := pl.NewSignal()
-	pp.Go(func() {
-		_, ok := pl.Read(pp, neverSend)
+	pl.Go(ctx, func() {
+		_, ok := pl.Read(ctx, neverSend)
 		assert.False(t, ok)
 		finished.Set()
 	})
 
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 	checkSignaled(t, finished)
 }
 
 func TestReadErr(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	res := make(chan int)
 
 	err1 := make(chan error)
 	err2 := make(chan error)
 
-	finished := pl.Run(pp, func() {
-		v, err := pl.ReadErr(pp, res, err1, err2)
+	finished := pl.Run(ctx, func() {
+		v, err := pl.ReadErr(ctx, res, err1, err2)
 		assert.Nil(t, err)
 		assert.Equal(t, v, 42)
 	})
@@ -97,8 +98,8 @@ func TestReadErr(t *testing.T) {
 func TestReadErrFinishWithError(t *testing.T) {
 	for index := range 10 {
 		t.Run(fmt.Sprintf("fail on errs[%d]", index), func(t *testing.T) {
-			pp := pl.NewPipeline()
-			defer checkShutdown(t, pp)
+			ctx, cancel := pl.NewPipeline(context.Background())
+			defer checkShutdown(t, ctx, cancel)
 
 			res := make(chan int)
 
@@ -112,8 +113,8 @@ func TestReadErrFinishWithError(t *testing.T) {
 				errs[k] = cherr
 			}
 
-			finished := pl.Run(pp, func() {
-				_, err := pl.ReadErr(pp, res, errs...)
+			finished := pl.Run(ctx, func() {
+				_, err := pl.ReadErr(ctx, res, errs...)
 				assert.Equal(t, err, errTest)
 			})
 
@@ -125,16 +126,16 @@ func TestReadErrFinishWithError(t *testing.T) {
 }
 
 func TestReadErrReportChannelClosed(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	res := make(chan int)
 
 	err1 := make(chan error)
 	err2 := make(chan error)
 
-	finished := pl.Run(pp, func() {
-		_, err := pl.ReadErr(pp, res, err1, err2)
+	finished := pl.Run(ctx, func() {
+		_, err := pl.ReadErr(ctx, res, err1, err2)
 		assert.Equal(t, err, pl.ErrChannelClosed)
 	})
 
@@ -144,16 +145,16 @@ func TestReadErrReportChannelClosed(t *testing.T) {
 }
 
 func TestReadErrErrorsCanClose(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	res := make(chan int)
 
 	err1 := make(chan error, 1)
 	err2 := make(chan error, 1)
 
-	finished := pl.Run(pp, func() {
-		_, err := pl.ReadErr(pp, res, err1, err2)
+	finished := pl.Run(ctx, func() {
+		_, err := pl.ReadErr(ctx, res, err1, err2)
 		assert.Equal(t, err, errTest)
 	})
 
@@ -165,7 +166,7 @@ func TestReadErrErrorsCanClose(t *testing.T) {
 }
 
 func TestReadErrReportCancelled(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	res := make(chan int)
 	err1 := make(chan error)
@@ -173,20 +174,20 @@ func TestReadErrReportCancelled(t *testing.T) {
 
 	finished := pl.NewSignal()
 	go func() {
-		_, err := pl.ReadErr(pp, res, err1, err2)
+		_, err := pl.ReadErr(ctx, res, err1, err2)
 		assert.Equal(t, err, pl.ErrChannelClosed)
 		finished.Set()
 	}()
 
 	checkPending(t, finished)
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 
 	checkSignaled(t, finished)
 }
 
 func TestReadErrFallbackToRead(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	res := make(chan int)
 	err1 := make(chan error)
@@ -194,7 +195,7 @@ func TestReadErrFallbackToRead(t *testing.T) {
 
 	finished := pl.NewSignal()
 	go func() {
-		val, err := pl.ReadErr(pp, res, err1, err2)
+		val, err := pl.ReadErr(ctx, res, err1, err2)
 		assert.Nil(t, err)
 		assert.Equal(t, val, 42)
 		finished.Set()
@@ -212,8 +213,8 @@ func TestReadErrFallbackToRead(t *testing.T) {
 }
 
 func TestReadErrReportWhanAllClosed(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	res := make(chan int)
 	err1 := make(chan error)
@@ -221,7 +222,7 @@ func TestReadErrReportWhanAllClosed(t *testing.T) {
 
 	finished := pl.NewSignal()
 	go func() {
-		_, err := pl.ReadErr(pp, res, err1, err2)
+		_, err := pl.ReadErr(ctx, res, err1, err2)
 		assert.Equal(t, err, pl.ErrChannelClosed)
 		finished.Set()
 	}()

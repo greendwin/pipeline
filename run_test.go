@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"context"
 	"testing"
 
 	pl "github.com/greendwin/pipeline"
@@ -8,11 +9,11 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	processed := pl.NewSignal()
-	finished := pl.Run(pp, func() {
+	finished := pl.Run(ctx, func() {
 		processed.Wait()
 	})
 
@@ -22,11 +23,11 @@ func TestRun(t *testing.T) {
 }
 
 func TestRunErr(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	processed := pl.NewSignal()
-	finished, cherr := pl.RunErr(pp, func() error {
+	finished, cherr := pl.RunErr(ctx, func() error {
 		processed.Wait()
 		return nil
 	})
@@ -39,11 +40,11 @@ func TestRunErr(t *testing.T) {
 }
 
 func TestRunErr_PropagateError(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	doFail := pl.NewSignal()
-	finished, cherr := pl.RunErr(pp, func() error {
+	finished, cherr := pl.RunErr(ctx, func() error {
 		doFail.Wait()
 		return errTest
 	})

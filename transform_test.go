@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -8,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func sequence(pp *pl.Pipeline, start, count int) <-chan int {
-	return pl.Generate(pp, func(wr pl.Writer[int]) {
+func sequence(ctx context.Context, start, count int) <-chan int {
+	return pl.Generate(ctx, func(wr pl.Writer[int]) {
 		for k := range count {
 			if !wr.Write(start + k) {
 				return
@@ -19,11 +20,11 @@ func sequence(pp *pl.Pipeline, start, count int) <-chan int {
 }
 
 func TestTransform(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
-	seq := sequence(pp, 0, 10)
-	seqAdd5 := pl.Transform(pp, 1, seq, func(x int) int {
+	seq := sequence(ctx, 0, 10)
+	seqAdd5 := pl.Transform(ctx, 1, seq, func(x int) int {
 		return x + 5
 	})
 
@@ -38,8 +39,8 @@ func TestTransform(t *testing.T) {
 }
 
 func TestTransformSpawnWorkers(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	numWorkers := 42
 
@@ -51,7 +52,7 @@ func TestTransformSpawnWorkers(t *testing.T) {
 
 	type res struct{ val int }
 
-	tr := pl.Transform(pp, numWorkers, input, func(x int) res {
+	tr := pl.Transform(ctx, numWorkers, input, func(x int) res {
 		started.Done()
 		passResult.Wait()
 		return res{x * 2}
@@ -80,11 +81,11 @@ func TestTransformSpawnWorkers(t *testing.T) {
 }
 
 func TestTransformErr(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
-	seq := sequence(pp, 0, 10)
-	seqAdd5, cherr := pl.TransformErr(pp, 1, seq, func(x int) (int, error) {
+	seq := sequence(ctx, 0, 10)
+	seqAdd5, cherr := pl.TransformErr(ctx, 1, seq, func(x int) (int, error) {
 		return x + 5, nil
 	})
 
@@ -101,8 +102,8 @@ func TestTransformErr(t *testing.T) {
 }
 
 func TestTransformErrSpawnWorkers(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	numWorkers := 42
 
@@ -114,7 +115,7 @@ func TestTransformErrSpawnWorkers(t *testing.T) {
 
 	type res struct{ val int }
 
-	tr, cherr := pl.TransformErr(pp, numWorkers, input, func(x int) (res, error) {
+	tr, cherr := pl.TransformErr(ctx, numWorkers, input, func(x int) (res, error) {
 		started.Done()
 		passResult.Wait()
 		return res{x * 2}, nil
@@ -145,14 +146,14 @@ func TestTransformErrSpawnWorkers(t *testing.T) {
 }
 
 func TestTransformErrPropagate(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	numWorkers := 42
 
 	input := make(chan int)
 	doFail := pl.NewSignal()
 
-	tr, cherr := pl.TransformErr(pp, numWorkers, input, func(x int) (int, error) {
+	tr, cherr := pl.TransformErr(ctx, numWorkers, input, func(x int) (int, error) {
 		doFail.Wait()
 		return 0, errTest
 	})
@@ -172,5 +173,5 @@ func TestTransformErrPropagate(t *testing.T) {
 
 	// note: multiple errors were emitted simultaneously,
 	// make sure that no goroutine was stuck
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 }

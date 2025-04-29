@@ -62,10 +62,11 @@ func ProcessErr[T any](ctx context.Context, threads int, in <-chan T, cb func(T)
 }
 
 func signalAfterAll(ctx context.Context, wg *sync.WaitGroup, hasError *atomic.Bool) Signal {
+	pipelineWg := getWaitGroup(ctx)
 	finished := NewSignal()
-	wg.Add(1)
+	pipelineWg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer pipelineWg.Done()
 		wg.Wait()
 
 		if hasError == nil || !hasError.Load() {
