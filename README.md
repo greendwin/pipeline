@@ -1,25 +1,26 @@
 Pipeline
 ========
 
-Concurrent computations library
+A concurrent computations library.
 
-This is an educational project that follows the patterns described in [Pipelines and cancellation
-](https://go.dev/blog/pipelines).
+This project follows the patterns described in the [Pipelines and cancellation
+](https://go.dev/blog/pipelines) blog post.
 
-It uses `context` to cancel computations in case of errors. Additionally, it tracks spawned goroutines, so you can be sure that all resources are cleaned up when the pipeline shuts down.
+It uses `context` to cancel computations when errors occur. Additionally, it keeps track of spawned goroutines so you can ensure all resources are cleanly closed when the pipeline finishes.
 
 ## Examples
 
-There are several examples in the repository:
-* `basic_transform` shows how to create a simple computation pipeline creation with proper cancellation
-* `errors_processing` demonstrates how to handle errors
-* `multiple_errors` shows a more complex example, where each stage may raise an error
+The repository contains several examples:
+* `basic_transform`: A simple pipeline creation with cancellation.
+* `errors_processing`: Handling errors in a pipeline.
+* `multiple_errors`: A more complex example with multple stages that may raise errors.
+
 
 ## Functions
 
 ### NewPipeline
 
-Function `NewPipeline` is useful when you want to ensure that all goroutines exit when the pipeline is cancelled.
+`NewPipeline` ensures that all goroutines in the pipeline exit when it cancelled.
 
 ```go
 ctx, cancel := pipeline.NewPipeline(context.Background())
@@ -28,14 +29,14 @@ ctx, cancel := pipeline.NewPipeline(context.Background())
 defer pipeline.Shutdown(ctx, cancel)
 ```
 
-Function `NewPipeline` is optional. You can use all pipeline creation methods without it if you don't need goroutine tracking.
+It is optional, so you can create a pipeline without it if goroutine tracking is not needed.
 
 
 ### Generate
 
 Generator is the starting point of any pipeline. The `Generate` function creates a channel for writing generated values.
 
-The method `pipeline.Writer[T].Write` returns `false` if the context is cancelled.
+The `Write` method of the `pipeline.Writer[T]` type returns `false` if the context is cancelled.
 
 ```go
 squares := pipeline.Generate(ctx, func (wr pipeline.Writer[int]) {
@@ -54,7 +55,7 @@ squares := pipeline.Generate(ctx, func (wr pipeline.Writer[int]) {
 
 ### Transform
 
-The `Transform` function spawns multiple workers and processes input channel in parallel.
+`Transform` creates multiple workers and processes the input channel in parallel.
 
 Results are unordered.
 
@@ -76,7 +77,7 @@ for v := range percents {
 
 ### Collect
 
-Function `Collect` can be used to collect the final results. It accepts a function that returns a result, and returns an oneshot channel so that the final result can be awaited in the next step.
+`Collect` can be used to gather the final results. It takes a function that returns a result and returns a oneshot channel to wait for the final result in the next step.
 
 ```go
 result := pipeline.Collect(ctx, func () (sum float32) {
@@ -101,7 +102,7 @@ if ok {
 
 ### Error handling
 
-Each processing function has a fallable version that returns an oneshot error channel in addition to the results.
+Each pipeline function has a fallable version that returns an oneshot error channel in addition to the result.
 
 ```go
 contents, contErr := pipeline.TransformErr(ctx, 16, urls, func (url string) ([]byte, error) {
