@@ -38,7 +38,7 @@ func TestTransform(t *testing.T) {
 	})
 }
 
-func TestTransformSpawnWorkers(t *testing.T) {
+func TestTransform_SpawnWorkers(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, ctx, cancel)
 
@@ -101,7 +101,7 @@ func TestTransformErr(t *testing.T) {
 	checkPending(t, cherr)
 }
 
-func TestTransformErrSpawnWorkers(t *testing.T) {
+func TestTransformErr_SpawnWorkers(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, ctx, cancel)
 
@@ -145,7 +145,7 @@ func TestTransformErrSpawnWorkers(t *testing.T) {
 	checkPending(t, cherr)
 }
 
-func TestTransformErrPropagate(t *testing.T) {
+func TestTransformErr_Propagate(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 
 	numWorkers := 42

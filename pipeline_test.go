@@ -6,6 +6,7 @@ import (
 	"time"
 
 	pl "github.com/greendwin/pipeline"
+	"github.com/stretchr/testify/assert"
 )
 
 func withTimeout(t *testing.T, context string, cb func()) {
@@ -69,4 +70,46 @@ func TestPipelineShutdown(t *testing.T) {
 	checkPending(t, shutdownFinished)
 	exit.Set()
 	checkSignaled(t, shutdownFinished)
+}
+
+func TestPipelineIsOptional(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	seq := pl.Generate(ctx, func(w pl.Writer[int]) {
+		for k := range 100 {
+			_ = w.Write(k)
+		}
+	})
+
+	continueCollect := pl.NewSignal()
+	foundStrangeNumber := pl.NewSignal()
+	res := pl.Collect(ctx, func() int {
+		sum := 0
+		for {
+			v, ok := pl.Read(ctx, seq)
+			if !ok {
+				break
+			}
+
+			if v == 42 {
+				foundStrangeNumber.Set()
+				continueCollect.Wait()
+				return sum
+			}
+
+			sum += v
+		}
+		return sum
+	})
+
+	withTimeout(t, "waiting collection", func() {
+		foundStrangeNumber.Wait()
+	})
+
+	checkPending(t, res)
+	cancel()
+	continueCollect.Set()
+
+	v := checkRead(t, res)
+	assert.Equal(t, 861, v) // sum from 0 to 42
 }
