@@ -1,6 +1,9 @@
 package pipeline
 
-import "errors"
+import (
+	"errors"
+	"reflect"
+)
 
 func Write[T any](pp *Pipeline, out chan<- T, val T) bool {
 	select {
@@ -28,31 +31,54 @@ var ErrChannelClosed = errors.New("channel closed")
 // returns `ErrChannelClosed` if value channel was closed
 // returns `ErrCancelled` if pipeline in shutting down
 // fallback to `Read` if all `errs` are closed (return `ErrChannelClosed` if !ok)
-func ReadErr[T any](pp *Pipeline, in <-chan T, errs ...<-chan error) (val T, err error) {
-	var ok bool
-	select {
-	case <-pp.done.Chan():
-		err = ErrChannelClosed
-		return
+func ReadErr[T any](pp *Pipeline, in <-chan T, errs ...<-chan error) (T, error) {
+	var cases []reflect.SelectCase
+	if len(errs) <= 2 {
+		cases = make([]reflect.SelectCase, len(errs)+2, 4) // stack allocation on simple cases
+	} else {
+		cases = make([]reflect.SelectCase, len(errs)+2)
+	}
 
-	case val, ok = <-in:
-		if !ok {
-			err = ErrChannelClosed
+	cases[0] = reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(in),
+	}
+
+	for k, cherr := range errs {
+		cases[k+1] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(cherr),
 		}
-		return
+	}
 
-	case err, ok = <-First(pp, errs...):
+	cases[len(cases)-1] = reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(pp.done.Chan()),
+	}
+
+	var empty T
+
+	for {
+		index, val, ok := reflect.Select(cases)
+
+		if index+1 == len(cases) {
+			// `pp.done` was triggered
+			return empty, ErrChannelClosed
+		}
+
 		if ok {
-			return
+			if index == 0 {
+				return val.Interface().(T), nil
+			}
+
+			return empty, val.Interface().(error)
 		}
 
-		// all error channels were closed, fall back to `Read`
-		val, ok = Read(pp, in)
-		if !ok {
-			err = ErrChannelClosed
+		// results channel was closed
+		if index == 0 {
+			return empty, ErrChannelClosed
 		}
-		return
+
+		cases = append(cases[:index], cases[index+1:]...)
 	}
 }
-
-// TODO: rewrite `ReadErr` without `First`

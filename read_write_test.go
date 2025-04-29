@@ -143,6 +143,27 @@ func TestReadErrReportChannelClosed(t *testing.T) {
 	checkSignaled(t, finished)
 }
 
+func TestReadErrErrorsCanClose(t *testing.T) {
+	pp := pl.NewPipeline()
+	defer checkShutdown(t, pp)
+
+	res := make(chan int)
+
+	err1 := make(chan error, 1)
+	err2 := make(chan error, 1)
+
+	finished := pl.Run(pp, func() {
+		_, err := pl.ReadErr(pp, res, err1, err2)
+		assert.Equal(t, err, errTest)
+	})
+
+	close(err1)
+	checkPending(t, finished)
+
+	err2 <- errTest
+	checkSignaled(t, finished)
+}
+
 func TestReadErrReportCancelled(t *testing.T) {
 	pp := pl.NewPipeline()
 

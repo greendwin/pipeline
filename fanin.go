@@ -18,7 +18,7 @@ func WaitFirst[T any](pp *Pipeline, in ...<-chan T) (T, bool) {
 	}
 
 	cases[len(in)].Dir = reflect.SelectRecv
-	cases[len(in)].Chan = reflect.ValueOf(pp.done)
+	cases[len(in)].Chan = reflect.ValueOf(pp.done.Chan())
 
 	for {
 		idx, v, ok := reflect.Select(cases)
@@ -72,7 +72,7 @@ func FanIn[T any](pp *Pipeline, in ...<-chan T) <-chan T {
 			cases[k].Chan = reflect.ValueOf(ch)
 		}
 		cases[len(in)].Dir = reflect.SelectRecv
-		cases[len(in)].Chan = reflect.ValueOf(pp.done)
+		cases[len(in)].Chan = reflect.ValueOf(pp.done.Chan())
 
 		for {
 			idx, v, ok := reflect.Select(cases)
