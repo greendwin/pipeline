@@ -1,20 +1,21 @@
 package pipeline
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 )
 
-func Process[T any](pp *Pipeline, threads int, in <-chan T, cb func(T)) Signal {
+func Process[T any](ctx context.Context, threads int, in <-chan T, cb func(T)) Signal {
 	var wg sync.WaitGroup
 	wg.Add(threads)
 
 	for range threads {
-		pp.Go(func() {
+		Go(ctx, func() {
 			defer wg.Done()
 
 			for {
-				v, ok := Read(pp, in)
+				v, ok := Read(ctx, in)
 				if !ok {
 					return
 				}
@@ -24,10 +25,10 @@ func Process[T any](pp *Pipeline, threads int, in <-chan T, cb func(T)) Signal {
 		})
 	}
 
-	return signalAfterAll(pp, &wg, nil)
+	return signalAfterAll(ctx, &wg, nil)
 }
 
-func ProcessErr[T any](pp *Pipeline, threads int, in <-chan T, cb func(T) error) (Signal, Oneshot[error]) {
+func ProcessErr[T any](ctx context.Context, threads int, in <-chan T, cb func(T) error) (Signal, Oneshot[error]) {
 	cherr := NewOneshotGroup[error](threads) // each worker can send one error
 
 	var wg sync.WaitGroup
@@ -36,11 +37,11 @@ func ProcessErr[T any](pp *Pipeline, threads int, in <-chan T, cb func(T) error)
 	hasError := atomic.Bool{}
 
 	for range threads {
-		pp.Go(func() {
+		Go(ctx, func() {
 			defer wg.Done()
 
 			for {
-				v, ok := Read(pp, in)
+				v, ok := Read(ctx, in)
 				if !ok {
 					return
 				}
@@ -55,16 +56,16 @@ func ProcessErr[T any](pp *Pipeline, threads int, in <-chan T, cb func(T) error)
 		})
 	}
 
-	finished := signalAfterAll(pp, &wg, &hasError)
+	finished := signalAfterAll(ctx, &wg, &hasError)
 
 	return finished, cherr.Chan()
 }
 
-func signalAfterAll(pp *Pipeline, wg *sync.WaitGroup, hasError *atomic.Bool) Signal {
+func signalAfterAll(ctx context.Context, wg *sync.WaitGroup, hasError *atomic.Bool) Signal {
 	finished := NewSignal()
-	pp.wg.Add(1)
+	wg.Add(1)
 	go func() {
-		defer pp.wg.Done()
+		defer wg.Done()
 		wg.Wait()
 
 		if hasError == nil || !hasError.Load() {

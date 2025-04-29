@@ -1,23 +1,26 @@
 package pipeline
 
+import "context"
+
 type Writer[T any] interface {
 	Write(T) bool
 }
 
 type channel[T any] struct {
-	pp *Pipeline
-	ch chan T
+	ctx context.Context
+	ch  chan T
 }
 
 func (ch *channel[T]) Write(val T) bool {
-	return Write(ch.pp, ch.ch, val)
+	return Write(ch.ctx, ch.ch, val)
 }
 
-func Generate[T any](pp *Pipeline, cb func(Writer[T])) <-chan T {
-	out := channel[T]{pp, make(chan T)}
-	pp.wg.Add(1)
+func Generate[T any](ctx context.Context, cb func(Writer[T])) <-chan T {
+	out := channel[T]{ctx, make(chan T)}
+	wg := getWaitGroup(ctx)
+	wg.Add(1)
 	go func() {
-		defer pp.wg.Done()
+		defer wg.Done()
 		defer close(out.ch)
 		cb(&out)
 	}()
@@ -25,9 +28,9 @@ func Generate[T any](pp *Pipeline, cb func(Writer[T])) <-chan T {
 	return out.ch
 }
 
-func GenerateErr[T any](pp *Pipeline, cb func(Writer[T]) error) (<-chan T, Oneshot[error]) {
-	out := channel[T]{pp, make(chan T)}
-	cherr := pp.GoErr(func() error {
+func GenerateErr[T any](ctx context.Context, cb func(Writer[T]) error) (<-chan T, Oneshot[error]) {
+	out := channel[T]{ctx, make(chan T)}
+	cherr := GoErr(ctx, func() error {
 		defer close(out.ch)
 		return cb(&out)
 	})
