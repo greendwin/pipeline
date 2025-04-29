@@ -1,50 +1,60 @@
 package pipeline
 
 import (
+	"context"
 	"sync"
 )
 
-// pipeline context
-// track spawned goroutines and gracefully shutdown full network
-type Pipeline struct {
-	wg   sync.WaitGroup
-	done SignalMut
+type contextKey int
+
+const waitGroupKey contextKey = 0
+
+func NewPipeline(parent context.Context) (context.Context, context.CancelFunc) {
+	ctxWg := context.WithValue(parent, waitGroupKey, &sync.WaitGroup{})
+	return context.WithCancel(ctxWg)
 }
 
-func NewPipeline() *Pipeline {
-	return &Pipeline{
-		done: NewSignal(),
+// stop entire pipeline and make sure that all waiting goroutines are unblocked and exited
+func Shutdown(ctx context.Context, cancel context.CancelFunc) {
+	wg := getWaitGroup(ctx)
+	if !wg.IsValid() {
+		panic("context must be create with `NewPipeline")
+	}
+	cancel()
+	wg.Wait()
+}
+
+func getWaitGroup(ctx context.Context) (opt optWaitGroup) {
+	r := ctx.Value(waitGroupKey)
+	if r != nil {
+		opt.wg = r.(*sync.WaitGroup)
+	}
+	return
+}
+
+// optional wait group, do nothing if context was create without `NewPipeline`
+type optWaitGroup struct {
+	wg *sync.WaitGroup
+}
+
+func (opt optWaitGroup) Add(delta int) {
+	if opt.wg != nil {
+		opt.wg.Add(delta)
 	}
 }
 
-// stop entire pipeline
-// make sure that all waiting goroutines are unblocked and exited
-func (pp *Pipeline) Shutdown() {
-	pp.done.Set()
-	pp.wg.Wait()
+func (opt optWaitGroup) Done() {
+	if opt.wg != nil {
+		opt.wg.Done()
+	}
 }
 
-// spawn goroutine, tracking spawn count
-// make sure that it will exit on shutdown
-func (pp *Pipeline) Go(cb func()) {
-	pp.wg.Add(1)
-	go func() {
-		defer pp.wg.Done()
-		cb()
-	}()
+func (opt optWaitGroup) Wait() {
+	if opt.wg != nil {
+		opt.wg.Wait()
+	}
 }
 
-// spawn goroutine that can fail
-func (pp *Pipeline) GoErr(cb func() error) Oneshot[error] {
-	cherr := NewOneshot[error]()
-	pp.wg.Add(1)
-	go func() {
-		defer pp.wg.Done()
-
-		err := cb()
-		if err != nil {
-			cherr.Write(err)
-		}
-	}()
-	return cherr.Chan()
+func (opt optWaitGroup) IsValid() bool {
+	return opt.wg != nil
 }

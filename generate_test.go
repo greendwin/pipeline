@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"context"
 	"testing"
 
 	pl "github.com/greendwin/pipeline"
@@ -8,10 +9,10 @@ import (
 )
 
 func TestGenerate(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
-	squares := pl.Generate(pp, func(wr pl.Writer[int]) {
+	squares := pl.Generate(ctx, func(wr pl.Writer[int]) {
 		for k := range 10 {
 			if !wr.Write(k * k) {
 				return
@@ -29,26 +30,26 @@ func TestGenerate(t *testing.T) {
 }
 
 func TestGenerateDontStuck(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	finished := pl.NewSignal()
 	// never receive
-	_ = pl.Generate(pp, func(wr pl.Writer[int]) {
+	_ = pl.Generate(ctx, func(wr pl.Writer[int]) {
 		r := wr.Write(42)
 		assert.False(t, r)
 		finished.Set()
 	})
 
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 	checkSignaled(t, finished)
 }
 
 func TestGenerateErr(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	finished := pl.NewSignal()
-	squares, cherr := pl.GenerateErr(pp, func(wr pl.Writer[int]) error {
+	squares, cherr := pl.GenerateErr(ctx, func(wr pl.Writer[int]) error {
 		for k := range 10 {
 			r := wr.Write(k * k)
 			assert.True(t, r)
@@ -70,10 +71,10 @@ func TestGenerateErr(t *testing.T) {
 }
 
 func TestGenerateErrPropagate(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
-	partial, cherr := pl.GenerateErr(pp, func(wr pl.Writer[int]) error {
+	partial, cherr := pl.GenerateErr(ctx, func(wr pl.Writer[int]) error {
 		for k := range 5 {
 			r := wr.Write(k * k)
 			assert.True(t, r)
@@ -99,10 +100,10 @@ func TestGenerateErrPropagate(t *testing.T) {
 }
 
 func TestGenerateErrDontStuck(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	finished := pl.NewSignal()
-	_, cherr := pl.GenerateErr(pp, func(wr pl.Writer[int]) error {
+	_, cherr := pl.GenerateErr(ctx, func(wr pl.Writer[int]) error {
 		r := wr.Write(42)
 		assert.False(t, r)
 		finished.Set()
@@ -110,7 +111,7 @@ func TestGenerateErrDontStuck(t *testing.T) {
 	})
 
 	// shutdown execution to unblock write
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 
 	checkPending(t, cherr)
 	checkSignaled(t, finished)

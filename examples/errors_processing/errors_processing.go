@@ -1,30 +1,31 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
 
-	pl "github.com/greendwin/pipeline"
+	"github.com/greendwin/pipeline"
 )
 
 func main() {
 	log.SetFlags(log.Ltime)
 
-	pp := pl.NewPipeline()
+	ctx, cancel := pipeline.NewPipeline(context.Background())
 	defer func() {
 		log.Println("shutting down...")
-		pp.Shutdown()
+		pipeline.Shutdown(ctx, cancel)
 		log.Println("done.")
 	}()
 
-	seq := pl.Generate(pp, func(w pl.Writer[int]) {
+	seq := pipeline.Generate(ctx, func(w pipeline.Writer[int]) {
 		for k := range 100 {
 			_ = w.Write(k) // on shutdown it would not stuck
 		}
 	})
 
-	tr, cherr := pl.TransformErr(pp, 5, seq, func(x int) (v string, err error) {
+	tr, cherr := pipeline.TransformErr(ctx, 5, seq, func(x int) (v string, err error) {
 		time.Sleep(100 * time.Millisecond)
 		if x == 42 {
 			err = fmt.Errorf("found strange number: %d", x)
@@ -34,7 +35,7 @@ func main() {
 		return
 	})
 
-	finished := pl.Process(pp, 2, tr, func(v string) {
+	finished := pipeline.Process(ctx, 2, tr, func(v string) {
 		time.Sleep(100 * time.Millisecond)
 		log.Println(v)
 	})

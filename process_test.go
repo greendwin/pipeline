@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -26,13 +27,13 @@ func (a *adder) Value() int {
 }
 
 func TestProcess(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	sum := adder{}
 
-	seq := sequence(pp, 0, 10)
-	finished := pl.Process(pp, 1, seq, func(x int) {
+	seq := sequence(ctx, 0, 10)
+	finished := pl.Process(ctx, 1, seq, func(x int) {
 		sum.Add(x)
 	})
 
@@ -41,8 +42,8 @@ func TestProcess(t *testing.T) {
 }
 
 func TestProcessSpawnWorkers(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	numWorkers := 42
 
@@ -52,7 +53,7 @@ func TestProcessSpawnWorkers(t *testing.T) {
 	input := make(chan int)
 	stopProcessing := pl.NewSignal()
 
-	finished := pl.Process(pp, numWorkers, input, func(x int) {
+	finished := pl.Process(ctx, numWorkers, input, func(x int) {
 		started.Done()
 		stopProcessing.Wait()
 	})
@@ -72,13 +73,13 @@ func TestProcessSpawnWorkers(t *testing.T) {
 }
 
 func TestProcessErr(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	sum := adder{}
 
-	seq := sequence(pp, 0, 10)
-	finished, cherr := pl.ProcessErr(pp, 1, seq, func(x int) error {
+	seq := sequence(ctx, 0, 10)
+	finished, cherr := pl.ProcessErr(ctx, 1, seq, func(x int) error {
 		sum.Add(x)
 		return nil
 	})
@@ -90,8 +91,8 @@ func TestProcessErr(t *testing.T) {
 }
 
 func TestProcessErrSpawnWorkers(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	numWorkers := 42
 
@@ -101,7 +102,7 @@ func TestProcessErrSpawnWorkers(t *testing.T) {
 	input := make(chan int)
 	stopProcessing := pl.NewSignal()
 
-	finished, cherr := pl.ProcessErr(pp, numWorkers, input, func(x int) error {
+	finished, cherr := pl.ProcessErr(ctx, numWorkers, input, func(x int) error {
 		started.Done()
 		stopProcessing.Wait()
 		return nil
@@ -124,14 +125,14 @@ func TestProcessErrSpawnWorkers(t *testing.T) {
 }
 
 func TestProcessErrPropagate(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	numWorkers := 42
 
 	input := make(chan int)
 	doFail := pl.NewSignal()
 
-	finished, cherr := pl.ProcessErr(pp, numWorkers, input, func(x int) error {
+	finished, cherr := pl.ProcessErr(ctx, numWorkers, input, func(x int) error {
 		doFail.Wait()
 		return errTest
 	})
@@ -151,5 +152,5 @@ func TestProcessErrPropagate(t *testing.T) {
 
 	// note: multiple errors were emitted simultaneously,
 	// make sure that no goroutine was stuck
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 }

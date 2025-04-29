@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"context"
 	"testing"
 
 	pl "github.com/greendwin/pipeline"
@@ -8,11 +9,11 @@ import (
 )
 
 func TestCollect(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
-	nums := sequence(pp, 0, 10)
-	sum := pl.Collect(pp, func() int {
+	nums := sequence(ctx, 0, 10)
+	sum := pl.Collect(ctx, func() int {
 		sum := 0
 		for v := range nums {
 			sum += v
@@ -25,16 +26,16 @@ func TestCollect(t *testing.T) {
 }
 
 func TestCollect_DontStuck(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
-	inf := pl.Generate(pp, func(w pl.Writer[int]) {
+	inf := pl.Generate(ctx, func(w pl.Writer[int]) {
 		k := 0
 		for w.Write(k) {
 			k += 1
 		}
 	})
 
-	sum := pl.Collect(pp, func() int {
+	sum := pl.Collect(ctx, func() int {
 		sum := 0
 		for v := range inf {
 			sum += v
@@ -42,16 +43,16 @@ func TestCollect_DontStuck(t *testing.T) {
 		return sum
 	})
 
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 	_ = checkRead(t, sum)
 }
 
 func TestCollectErr(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
-	nums := sequence(pp, 0, 10)
-	sum, cherr := pl.CollectErr(pp, func() (int, error) {
+	nums := sequence(ctx, 0, 10)
+	sum, cherr := pl.CollectErr(ctx, func() (int, error) {
 		sum := 0
 		for v := range nums {
 			sum += v
@@ -66,10 +67,10 @@ func TestCollectErr(t *testing.T) {
 }
 
 func TestCollectErr_PropagateError(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	passError := pl.NewSignal()
-	sum, cherr := pl.CollectErr(pp, func() (int, error) {
+	sum, cherr := pl.CollectErr(ctx, func() (int, error) {
 		passError.Wait()
 		return 0, errTest
 	})
@@ -82,7 +83,7 @@ func TestCollectErr_PropagateError(t *testing.T) {
 	err := checkRead(t, cherr)
 	assert.Equal(t, err, errTest)
 
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 
 	// oneshot never closed
 	checkPending(t, sum)

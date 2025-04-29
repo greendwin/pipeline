@@ -1,6 +1,7 @@
 package pipeline_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -11,8 +12,8 @@ import (
 func TestWaitFirst(t *testing.T) {
 	for index := range 10 {
 		t.Run(fmt.Sprintf("FirstRecv(%d)", index), func(t *testing.T) {
-			pp := pl.NewPipeline()
-			defer checkShutdown(t, pp)
+			ctx, cancel := pl.NewPipeline(context.Background())
+			defer checkShutdown(t, ctx, cancel)
 
 			opts := make([]chan int, 10)
 			optsIn := make([]<-chan int, len(opts))
@@ -24,7 +25,7 @@ func TestWaitFirst(t *testing.T) {
 
 			finished := pl.NewSignal()
 			go func() {
-				v, ok := pl.WaitFirst(pp, optsIn...)
+				v, ok := pl.WaitFirst(ctx, optsIn...)
 				assert.True(t, ok)
 				assert.Equal(t, v, 42)
 				finished.Set()
@@ -38,25 +39,25 @@ func TestWaitFirst(t *testing.T) {
 }
 
 func TestWaitFirst_NeverStuck(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	neverSend1 := make(chan int)
 	neverSend2 := make(chan int)
 
 	finished := pl.NewSignal()
 	go func() {
-		_, ok := pl.WaitFirst(pp, neverSend1, neverSend2)
+		_, ok := pl.WaitFirst(ctx, neverSend1, neverSend2)
 		assert.False(t, ok)
 		finished.Set()
 	}()
 
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 	checkSignaled(t, finished)
 }
 
 func TestWaitFirst_IgnoreClosedChannels(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	willClose1 := make(chan int)
 	willClose2 := make(chan int)
@@ -64,7 +65,7 @@ func TestWaitFirst_IgnoreClosedChannels(t *testing.T) {
 
 	finished := pl.NewSignal()
 	go func() {
-		v, ok := pl.WaitFirst(pp, willClose1, willClose2, willSend)
+		v, ok := pl.WaitFirst(ctx, willClose1, willClose2, willSend)
 		assert.True(t, ok)
 		assert.Equal(t, v, 42)
 		finished.Set()
@@ -81,15 +82,15 @@ func TestWaitFirst_IgnoreClosedChannels(t *testing.T) {
 }
 
 func TestWaitFirst_ReturnNoneWhenAllClosed(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	willClose1 := make(chan int)
 	willClose2 := make(chan int)
 
 	finished := pl.NewSignal()
 	go func() {
-		_, ok := pl.WaitFirst(pp, willClose1, willClose2)
+		_, ok := pl.WaitFirst(ctx, willClose1, willClose2)
 		assert.False(t, ok)
 		finished.Set()
 	}()
@@ -102,8 +103,8 @@ func TestWaitFirst_ReturnNoneWhenAllClosed(t *testing.T) {
 }
 
 func TestFirst(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	opts := make([]chan int, 10)
 	optsIn := make([]<-chan int, len(opts))
@@ -113,7 +114,7 @@ func TestFirst(t *testing.T) {
 		optsIn[k] = ch
 	}
 
-	res := pl.First(pp, optsIn...)
+	res := pl.First(ctx, optsIn...)
 	checkPending(t, res)
 
 	close(opts[4])
@@ -131,13 +132,13 @@ func TestFirst(t *testing.T) {
 	})
 }
 func TestFirst_AllClosed(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
 	willClose1 := make(chan int)
 	willClose2 := make(chan int)
 
-	res := pl.First(pp, willClose1, willClose2)
+	res := pl.First(ctx, willClose1, willClose2)
 	checkPending(t, res)
 
 	close(willClose1)
@@ -148,14 +149,14 @@ func TestFirst_AllClosed(t *testing.T) {
 }
 
 func TestFanIn(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, ctx, cancel)
 
-	seq1 := sequence(pp, 0, 10)
-	seq2 := sequence(pp, 10, 3)
-	seq3 := sequence(pp, 13, 7)
+	seq1 := sequence(ctx, 0, 10)
+	seq2 := sequence(ctx, 10, 3)
+	seq3 := sequence(ctx, 13, 7)
 
-	merged := pl.FanIn(pp, seq1, seq2, seq3)
+	merged := pl.FanIn(ctx, seq1, seq2, seq3)
 
 	withTimeout(t, "read merged channel", func() {
 		received := make([]bool, 20)
@@ -170,13 +171,13 @@ func TestFanIn(t *testing.T) {
 }
 
 func TestFanIn_NeverStuckOnRecv(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	neverSend1 := make(chan int)
 	neverSend2 := make(chan int)
 	neverSend3 := make(chan int)
 
-	merged := pl.FanIn(pp, neverSend1, neverSend2, neverSend3)
+	merged := pl.FanIn(ctx, neverSend1, neverSend2, neverSend3)
 
 	finished := pl.NewSignal()
 	go func() {
@@ -185,19 +186,19 @@ func TestFanIn_NeverStuckOnRecv(t *testing.T) {
 		finished.Set()
 	}()
 
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 	checkSignaled(t, finished)
 }
 
 func TestFanIn_NeverStuckOnSend(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
-	seq1 := sequence(pp, 0, 10)
-	seq2 := sequence(pp, 10, 3)
-	seq3 := sequence(pp, 13, 7)
+	seq1 := sequence(ctx, 0, 10)
+	seq2 := sequence(ctx, 10, 3)
+	seq3 := sequence(ctx, 13, 7)
 
-	merged := pl.FanIn(pp, seq1, seq2, seq3)
+	merged := pl.FanIn(ctx, seq1, seq2, seq3)
 
-	checkShutdown(t, pp)
+	checkShutdown(t, ctx, cancel)
 	checkSignaled(t, merged)
 }

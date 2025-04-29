@@ -1,7 +1,7 @@
 package pipeline_test
 
 import (
-	"errors"
+	"context"
 	"testing"
 	"time"
 
@@ -23,11 +23,11 @@ func withTimeout(t *testing.T, context string, cb func()) {
 	}
 }
 
-func checkShutdown(t *testing.T, pp *pl.Pipeline) {
+func checkShutdown(t *testing.T, ctx context.Context, cancel context.CancelFunc) {
 	t.Helper()
 
 	withTimeout(t, "pipline shutdown", func() {
-		pp.Shutdown()
+		pl.Shutdown(ctx, cancel)
 	})
 }
 
@@ -52,29 +52,17 @@ func checkRead[T any](t *testing.T, ch <-chan T) T {
 	return r.val
 }
 
-func TestPipelineGo(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
-
-	started := pl.NewSignal()
-	pp.Go(func() {
-		started.Set()
-	})
-
-	checkSignaled(t, started)
-}
-
 func TestPipelineShutdown(t *testing.T) {
-	pp := pl.NewPipeline()
+	ctx, cancel := pl.NewPipeline(context.Background())
 
 	exit := pl.NewSignal()
-	pp.Go(func() {
+	pl.Go(ctx, func() {
 		<-exit
 	})
 
 	shutdownFinished := pl.NewSignal()
 	go func() {
-		pp.Shutdown()
+		pl.Shutdown(ctx, cancel)
 		shutdownFinished.Set()
 	}()
 
@@ -84,47 +72,44 @@ func TestPipelineShutdown(t *testing.T) {
 	checkSignaled(t, shutdownFinished)
 }
 
-var errTest = errors.New("test")
+func TestPipelineIsOptional(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
 
-func TestPipelineGoErr(t *testing.T) {
-	pp := pl.NewPipeline()
-	defer checkShutdown(t, pp)
-
-	started := pl.NewSignal()
-	exit := pl.NewSignal()
-
-	cherr := pp.GoErr(func() error {
-		started.Set()
-		<-exit
-		return errTest
+	seq := pl.Generate(ctx, func(w pl.Writer[int]) {
+		for k := range 100 {
+			_ = w.Write(k)
+		}
 	})
 
-	checkSignaled(t, started)
-	checkPending(t, cherr)
+	continueCollect := pl.NewSignal()
+	foundStrangeNumber := pl.NewSignal()
+	res := pl.Collect(ctx, func() int {
+		sum := 0
+		for {
+			v, ok := pl.Read(ctx, seq)
+			if !ok {
+				break
+			}
 
-	exit.Set()
+			if v == 42 {
+				foundStrangeNumber.Set()
+				continueCollect.Wait()
+				return sum
+			}
 
-	err := checkRead(t, cherr)
-	assert.Equal(t, err, errTest)
-}
-
-func TestPipelineShutdownGoErr(t *testing.T) {
-	pp := pl.NewPipeline()
-
-	exit := pl.NewSignal()
-	pp.GoErr(func() error {
-		<-exit
-		return nil
+			sum += v
+		}
+		return sum
 	})
 
-	shutdownFinished := pl.NewSignal()
-	go func() {
-		pp.Shutdown()
-		shutdownFinished.Set()
-	}()
+	withTimeout(t, "waiting collection", func() {
+		foundStrangeNumber.Wait()
+	})
 
-	// wait for all spawned goroutines to exit
-	checkPending(t, shutdownFinished)
-	exit.Set()
-	checkSignaled(t, shutdownFinished)
+	checkPending(t, res)
+	cancel()
+	continueCollect.Set()
+
+	v := checkRead(t, res)
+	assert.Equal(t, 861, v) // sum from 0 to 42
 }

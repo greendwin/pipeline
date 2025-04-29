@@ -1,24 +1,25 @@
 package pipeline
 
 import (
+	"context"
 	"errors"
 	"reflect"
 )
 
-func Write[T any](pp *Pipeline, out chan<- T, val T) bool {
+func Write[T any](ctx context.Context, out chan<- T, val T) bool {
 	select {
 	case out <- val:
 		return true
-	case <-pp.done:
+	case <-ctx.Done():
 		return false
 	}
 }
 
-func Read[T any](pp *Pipeline, in <-chan T) (val T, ok bool) {
+func Read[T any](ctx context.Context, in <-chan T) (val T, ok bool) {
 	select {
 	case val, ok = <-in:
 		return
-	case <-pp.done:
+	case <-ctx.Done():
 		ok = false // for clarity
 		return
 	}
@@ -31,7 +32,7 @@ var ErrChannelClosed = errors.New("channel closed")
 // returns `ErrChannelClosed` if value channel was closed
 // returns `ErrCancelled` if pipeline in shutting down
 // fallback to `Read` if all `errs` are closed (return `ErrChannelClosed` if !ok)
-func ReadErr[T any](pp *Pipeline, in <-chan T, errs ...<-chan error) (T, error) {
+func ReadErr[T any](ctx context.Context, in <-chan T, errs ...<-chan error) (T, error) {
 	var cases []reflect.SelectCase
 	if len(errs) <= 2 {
 		cases = make([]reflect.SelectCase, len(errs)+2, 4) // stack allocation on simple cases
@@ -53,7 +54,7 @@ func ReadErr[T any](pp *Pipeline, in <-chan T, errs ...<-chan error) (T, error) 
 
 	cases[len(cases)-1] = reflect.SelectCase{
 		Dir:  reflect.SelectRecv,
-		Chan: reflect.ValueOf(pp.done.Chan()),
+		Chan: reflect.ValueOf(ctx.Done()),
 	}
 
 	var empty T
