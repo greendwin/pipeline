@@ -12,7 +12,7 @@ func TestCollect(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
-	nums := sequence(ctx, 0, 10)
+	nums, numsErr := sequence(ctx, 0, 10)
 	sum := pl.Collect(ctx, func() int {
 		sum := 0
 		for v := range nums {
@@ -23,14 +23,20 @@ func TestCollect(t *testing.T) {
 
 	r := checkRead(t, sum)
 	assert.Equal(t, r, 45)
+
+	checkPending(t, numsErr)
 }
 
 func TestCollect_DontStuck(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 
-	inf := pl.Generate(ctx, func(w pl.Writer[int]) {
+	inf, infErr := pl.Generate(ctx, func(w pl.Writer[int]) error {
 		k := 0
-		for w.Write(k) {
+		for {
+			err := w.Write(k)
+			if err != nil {
+				return err
+			}
 			k += 1
 		}
 	})
@@ -45,13 +51,14 @@ func TestCollect_DontStuck(t *testing.T) {
 
 	checkShutdown(t, cancel)
 	_ = checkRead(t, sum)
+	checkPending(t, infErr)
 }
 
 func TestCollectErr(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
-	nums := sequence(ctx, 0, 10)
+	nums, numsErr := sequence(ctx, 0, 10)
 	sum, cherr := pl.CollectErr(ctx, func() (int, error) {
 		sum := 0
 		for v := range nums {
@@ -64,6 +71,7 @@ func TestCollectErr(t *testing.T) {
 	assert.Equal(t, r, 45)
 
 	checkPending(t, cherr) // no errors
+	checkPending(t, numsErr)
 }
 
 func TestCollectErr_PropagateError(t *testing.T) {

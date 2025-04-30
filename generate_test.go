@@ -12,47 +12,11 @@ func TestGenerate(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
-	squares := pl.Generate(ctx, func(wr pl.Writer[int]) {
-		for k := range 10 {
-			if !wr.Write(k * k) {
-				return
-			}
-		}
-	})
-
-	withTimeout(t, "read seq", func() {
-		index := 0
-		for val := range squares {
-			assert.Equal(t, val, index*index)
-			index += 1
-		}
-	})
-}
-
-func TestGenerateDontStuck(t *testing.T) {
-	ctx, cancel := pl.NewPipeline(context.Background())
-
 	finished := pl.NewSignal()
-	// never receive
-	_ = pl.Generate(ctx, func(wr pl.Writer[int]) {
-		r := wr.Write(42)
-		assert.False(t, r)
-		finished.Set()
-	})
-
-	checkShutdown(t, cancel)
-	checkSignaled(t, finished)
-}
-
-func TestGenerateErr(t *testing.T) {
-	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, cancel)
-
-	finished := pl.NewSignal()
-	squares, cherr := pl.GenerateErr(ctx, func(wr pl.Writer[int]) error {
+	squares, cherr := pl.Generate(ctx, func(wr pl.Writer[int]) error {
 		for k := range 10 {
-			r := wr.Write(k * k)
-			assert.True(t, r)
+			err := wr.Write(k * k)
+			assert.Nil(t, err)
 		}
 		finished.Set()
 		return nil
@@ -70,14 +34,14 @@ func TestGenerateErr(t *testing.T) {
 	checkSignaled(t, finished)
 }
 
-func TestGenerateErrPropagate(t *testing.T) {
+func TestGenerate_PropagateError(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
-	partial, cherr := pl.GenerateErr(ctx, func(wr pl.Writer[int]) error {
+	partial, cherr := pl.Generate(ctx, func(wr pl.Writer[int]) error {
 		for k := range 5 {
-			r := wr.Write(k * k)
-			assert.True(t, r)
+			err := wr.Write(k * k)
+			assert.Nil(t, err)
 		}
 		return errTest
 	})
@@ -99,13 +63,13 @@ func TestGenerateErrPropagate(t *testing.T) {
 	checkSignaled(t, finished)
 }
 
-func TestGenerateErrDontStuck(t *testing.T) {
+func TestGenerate_DontStuck(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 
 	finished := pl.NewSignal()
-	_, cherr := pl.GenerateErr(ctx, func(wr pl.Writer[int]) error {
-		r := wr.Write(42)
-		assert.False(t, r)
+	_, cherr := pl.Generate(ctx, func(wr pl.Writer[int]) error {
+		err := wr.Write(42)
+		assert.ErrorIs(t, err, context.Canceled)
 		finished.Set()
 		return nil
 	})
@@ -116,3 +80,5 @@ func TestGenerateErrDontStuck(t *testing.T) {
 	checkPending(t, cherr)
 	checkSignaled(t, finished)
 }
+
+// TODO: add test for `Cause` propagation

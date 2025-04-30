@@ -215,9 +215,9 @@ func TestFanIn(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
-	seq1 := sequence(ctx, 0, 10)
-	seq2 := sequence(ctx, 10, 3)
-	seq3 := sequence(ctx, 13, 7)
+	seq1, seq1Err := sequence(ctx, 0, 10)
+	seq2, seq2Err := sequence(ctx, 10, 3)
+	seq3, seq3Err := sequence(ctx, 13, 7)
 
 	merged, cherr := pl.FanIn(ctx, seq1, seq2, seq3)
 
@@ -233,6 +233,11 @@ func TestFanIn(t *testing.T) {
 	})
 
 	checkPending(t, cherr) // no errors
+
+	checkPending(t, seq1Err)
+	checkPending(t, seq2Err)
+	checkPending(t, seq3Err)
+
 }
 
 func TestFanIn_NeverStuckOnRecv(t *testing.T) {
@@ -254,9 +259,9 @@ func TestFanIn_NeverStuckOnRecv(t *testing.T) {
 func TestFanIn_NeverStuckOnSend(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 
-	seq1 := sequence(ctx, 0, 10)
-	seq2 := sequence(ctx, 10, 3)
-	seq3 := sequence(ctx, 13, 7)
+	seq1, seq1Err := sequence(ctx, 0, 10)
+	seq2, seq2Err := sequence(ctx, 10, 3)
+	seq3, seq3Err := sequence(ctx, 13, 7)
 
 	merged, cherr := pl.FanIn(ctx, seq1, seq2, seq3)
 
@@ -270,13 +275,18 @@ func TestFanIn_NeverStuckOnSend(t *testing.T) {
 	checkPending(t, merged) // should not be closed
 	err := checkRead(t, cherr)
 	assert.ErrorIs(t, err, context.Canceled)
+
+	// no errors
+	checkPending(t, seq1Err)
+	checkPending(t, seq2Err)
+	checkPending(t, seq3Err)
 }
 
 func TestFanIn_PropagateCause(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 
-	seq1 := sequence(ctx, 0, 10)
-	seq2 := sequence(ctx, 10, 3)
+	seq1, seq1Err := sequence(ctx, 0, 10)
+	seq2, seq2Err := sequence(ctx, 10, 3)
 
 	merged, cherr := pl.FanIn(ctx, seq1, seq2)
 
@@ -291,4 +301,8 @@ func TestFanIn_PropagateCause(t *testing.T) {
 	assert.ErrorIs(t, err, errTest)
 
 	checkPending(t, merged) // would not close
+
+	// no errors
+	checkPending(t, seq1Err)
+	checkPending(t, seq2Err)
 }

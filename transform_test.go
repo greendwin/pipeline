@@ -9,13 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func sequence(ctx context.Context, start, count int) <-chan int {
-	return pl.Generate(ctx, func(wr pl.Writer[int]) {
+func sequence(ctx context.Context, start, count int) (<-chan int, pl.Oneshot[error]) {
+	return pl.Generate(ctx, func(wr pl.Writer[int]) error {
 		for k := range count {
-			if !wr.Write(start + k) {
-				return
+			if err := wr.Write(start + k); err != nil {
+				return err
 			}
 		}
+		return nil
 	})
 }
 
@@ -23,9 +24,9 @@ func TestTransform(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
-	seq := sequence(ctx, 0, 10)
-	seqAdd5 := pl.Transform(ctx, 1, seq, func(x int) int {
-		return x + 5
+	seq, seqErr := sequence(ctx, 0, 10)
+	seqAdd5, seqAdd5Err := pl.Transform(ctx, 1, seq, func(x int) (int, error) {
+		return x + 5, nil
 	})
 
 	withTimeout(t, "read seq vals", func() {
@@ -36,6 +37,9 @@ func TestTransform(t *testing.T) {
 		}
 		assert.Equal(t, index, 10)
 	})
+
+	checkPending(t, seqErr)
+	checkPending(t, seqAdd5Err)
 }
 
 func TestTransform_SpawnWorkers(t *testing.T) {
@@ -52,70 +56,7 @@ func TestTransform_SpawnWorkers(t *testing.T) {
 
 	type res struct{ val int }
 
-	tr := pl.Transform(ctx, numWorkers, input, func(x int) res {
-		started.Done()
-		passResult.Wait()
-		return res{x * 2}
-	})
-
-	withTimeout(t, "count spawned workers", func() {
-		for range numWorkers {
-			input <- 42
-		}
-		started.Wait()
-	})
-
-	withTimeout(t, "check processed results", func() {
-		close(input)
-		checkPending(t, tr) // all workers are locked by processing
-
-		passResult.Set()
-
-		count := 0
-		for val := range tr {
-			assert.Equal(t, val.val, 84)
-			count += 1
-		}
-		assert.Equal(t, count, numWorkers)
-	})
-}
-
-func TestTransformErr(t *testing.T) {
-	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, cancel)
-
-	seq := sequence(ctx, 0, 10)
-	seqAdd5, cherr := pl.TransformErr(ctx, 1, seq, func(x int) (int, error) {
-		return x + 5, nil
-	})
-
-	withTimeout(t, "read seq vals", func() {
-		index := 0
-		for k := range seqAdd5 {
-			assert.Equal(t, k, index+5)
-			index += 1
-		}
-		assert.Equal(t, index, 10)
-	})
-
-	checkPending(t, cherr)
-}
-
-func TestTransformErr_SpawnWorkers(t *testing.T) {
-	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, cancel)
-
-	numWorkers := 42
-
-	started := sync.WaitGroup{}
-	started.Add(numWorkers)
-
-	input := make(chan int)
-	passResult := pl.NewSignal()
-
-	type res struct{ val int }
-
-	tr, cherr := pl.TransformErr(ctx, numWorkers, input, func(x int) (res, error) {
+	tr, cherr := pl.Transform(ctx, numWorkers, input, func(x int) (res, error) {
 		started.Done()
 		passResult.Wait()
 		return res{x * 2}, nil
@@ -145,7 +86,7 @@ func TestTransformErr_SpawnWorkers(t *testing.T) {
 	checkPending(t, cherr)
 }
 
-func TestTransformErr_Propagate(t *testing.T) {
+func TestTransform_Propagate(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 
 	numWorkers := 42
@@ -153,7 +94,7 @@ func TestTransformErr_Propagate(t *testing.T) {
 	input := make(chan int)
 	doFail := pl.NewSignal()
 
-	tr, cherr := pl.TransformErr(ctx, numWorkers, input, func(x int) (int, error) {
+	tr, cherr := pl.Transform(ctx, numWorkers, input, func(x int) (int, error) {
 		doFail.Wait()
 		return 0, errTest
 	})

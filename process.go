@@ -6,29 +6,7 @@ import (
 	"sync/atomic"
 )
 
-func Process[T any](ctx context.Context, threads int, in <-chan T, cb func(T)) Signal {
-	var wg sync.WaitGroup
-	wg.Add(threads)
-
-	for range threads {
-		Go(ctx, func() {
-			defer wg.Done()
-
-			for {
-				v, ok := Read(ctx, in)
-				if !ok {
-					return
-				}
-
-				cb(v)
-			}
-		})
-	}
-
-	return signalAfterAll(ctx, &wg, nil)
-}
-
-func ProcessErr[T any](ctx context.Context, threads int, in <-chan T, cb func(T) error) (Signal, Oneshot[error]) {
+func Process[T any](ctx context.Context, threads int, in <-chan T, cb func(T) error) (Signal, Oneshot[error]) {
 	cherr := NewOneshotGroup[error](threads) // each worker can send one error
 
 	var wg sync.WaitGroup
@@ -41,12 +19,11 @@ func ProcessErr[T any](ctx context.Context, threads int, in <-chan T, cb func(T)
 			defer wg.Done()
 
 			for {
-				v, ok := Read(ctx, in)
-				if !ok {
-					return
+				v, err := Read(ctx, in)
+				if err == nil {
+					err = cb(v)
 				}
 
-				err := cb(v)
 				if err != nil {
 					cherr.Write(err)
 					hasError.Store(true)

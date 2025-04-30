@@ -75,31 +75,34 @@ func TestPipelineShutdown(t *testing.T) {
 func TestPipelineIsOptional(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	seq := pl.Generate(ctx, func(w pl.Writer[int]) {
+	seq, seqErr := pl.Generate(ctx, func(w pl.Writer[int]) error {
 		for k := range 100 {
 			_ = w.Write(k)
 		}
+		return nil
 	})
 
 	continueCollect := pl.NewSignal()
 	foundStrangeNumber := pl.NewSignal()
-	res := pl.Collect(ctx, func() int {
+	res, resErr := pl.CollectErr(ctx, func() (int, error) {
 		sum := 0
 		for {
-			v, ok := pl.Read(ctx, seq)
-			if !ok {
+			v, err := pl.Read(ctx, seq)
+			if err != nil {
+				// ignore error, return tmp result
 				break
 			}
 
 			if v == 42 {
 				foundStrangeNumber.Set()
 				continueCollect.Wait()
-				return sum
+				return sum, nil
 			}
 
 			sum += v
 		}
-		return sum
+
+		return sum, nil
 	})
 
 	withTimeout(t, "waiting collection", func() {
@@ -112,4 +115,8 @@ func TestPipelineIsOptional(t *testing.T) {
 
 	v := checkRead(t, res)
 	assert.Equal(t, 861, v) // sum from 0 to 42
+
+	// no errors were sent
+	checkPending(t, seqErr)
+	checkPending(t, resErr)
 }

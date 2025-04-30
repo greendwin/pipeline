@@ -5,21 +5,25 @@ import (
 	"reflect"
 )
 
-func Write[T any](ctx context.Context, out chan<- T, val T) bool {
+func Write[T any](ctx context.Context, out chan<- T, val T) error {
 	select {
 	case out <- val:
-		return true
+		return nil
 	case <-ctx.Done():
-		return false
+		return context.Cause(ctx)
 	}
 }
 
-func Read[T any](ctx context.Context, in <-chan T) (val T, ok bool) {
+func Read[T any](ctx context.Context, in <-chan T) (val T, err error) {
+	var ok bool
 	select {
 	case val, ok = <-in:
+		if !ok {
+			err = ErrChannelClosed
+		}
 		return
 	case <-ctx.Done():
-		ok = false // for clarity
+		err = context.Cause(ctx)
 		return
 	}
 }

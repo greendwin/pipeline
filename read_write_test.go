@@ -17,8 +17,8 @@ func TestWrite(t *testing.T) {
 
 	withTimeout(t, "write values", func() {
 		for k := range cap(recv) {
-			ok := pl.Write(ctx, recv, k)
-			assert.True(t, ok)
+			err := pl.Write(ctx, recv, k)
+			assert.Nil(t, err)
 		}
 	})
 }
@@ -28,8 +28,8 @@ func TestWrite_DontStuck(t *testing.T) {
 	neverRecv := make(chan int)
 
 	pl.Go(ctx, func() {
-		ok := pl.Write(ctx, neverRecv, 42)
-		assert.False(t, ok)
+		err := pl.Write(ctx, neverRecv, 42)
+		assert.ErrorIs(t, err, context.Canceled)
 	})
 
 	checkShutdown(t, cancel)
@@ -47,14 +47,14 @@ func TestRead(t *testing.T) {
 
 	withTimeout(t, "read values", func() {
 		for k := range cap(vals) {
-			v, ok := pl.Read(ctx, vals)
-			assert.True(t, ok)
+			v, err := pl.Read(ctx, vals)
+			assert.Nil(t, err)
 			assert.Equal(t, v, k)
 		}
 
 		for range 3 {
-			_, ok := pl.Read(ctx, vals)
-			assert.False(t, ok)
+			_, err := pl.Read(ctx, vals)
+			assert.ErrorIs(t, err, context.Canceled)
 		}
 	})
 }
@@ -66,8 +66,8 @@ func TestRead_NeverStuck(t *testing.T) {
 
 	finished := pl.NewSignal()
 	pl.Go(ctx, func() {
-		_, ok := pl.Read(ctx, neverSend)
-		assert.False(t, ok)
+		_, err := pl.Read(ctx, neverSend)
+		assert.ErrorIs(t, err, context.Canceled)
 		finished.Set()
 	})
 

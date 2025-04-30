@@ -32,54 +32,8 @@ func TestProcess(t *testing.T) {
 
 	sum := adder{}
 
-	seq := sequence(ctx, 0, 10)
-	finished := pl.Process(ctx, 1, seq, func(x int) {
-		sum.Add(x)
-	})
-
-	checkSignaled(t, finished)
-	assert.Equal(t, sum.Value(), 45)
-}
-
-func TestProcessSpawnWorkers(t *testing.T) {
-	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, cancel)
-
-	numWorkers := 42
-
-	started := sync.WaitGroup{}
-	started.Add(numWorkers)
-
-	input := make(chan int)
-	stopProcessing := pl.NewSignal()
-
-	finished := pl.Process(ctx, numWorkers, input, func(x int) {
-		started.Done()
-		stopProcessing.Wait()
-	})
-
-	withTimeout(t, "count spawned workers", func() {
-		for range numWorkers {
-			input <- 42
-		}
-		started.Wait()
-	})
-
-	stopProcessing.Set()
-	checkPending(t, finished) // network is waiting for new input values
-
-	close(input)
-	checkSignaled(t, finished)
-}
-
-func TestProcessErr(t *testing.T) {
-	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, cancel)
-
-	sum := adder{}
-
-	seq := sequence(ctx, 0, 10)
-	finished, cherr := pl.ProcessErr(ctx, 1, seq, func(x int) error {
+	seq, seqErr := sequence(ctx, 0, 10)
+	finished, cherr := pl.Process(ctx, 1, seq, func(x int) error {
 		sum.Add(x)
 		return nil
 	})
@@ -87,10 +41,12 @@ func TestProcessErr(t *testing.T) {
 	checkSignaled(t, finished)
 	assert.Equal(t, sum.Value(), 45)
 
-	checkPending(t, cherr) // no errors
+	// no errors
+	checkPending(t, seqErr)
+	checkPending(t, cherr)
 }
 
-func TestProcessErrSpawnWorkers(t *testing.T) {
+func TestProcess_SpawnWorkers(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
@@ -102,7 +58,7 @@ func TestProcessErrSpawnWorkers(t *testing.T) {
 	input := make(chan int)
 	stopProcessing := pl.NewSignal()
 
-	finished, cherr := pl.ProcessErr(ctx, numWorkers, input, func(x int) error {
+	finished, cherr := pl.Process(ctx, numWorkers, input, func(x int) error {
 		started.Done()
 		stopProcessing.Wait()
 		return nil
@@ -124,7 +80,7 @@ func TestProcessErrSpawnWorkers(t *testing.T) {
 	checkPending(t, cherr) // no errors
 }
 
-func TestProcessErrPropagate(t *testing.T) {
+func TestProcess_Propagate(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 
 	numWorkers := 42
@@ -132,7 +88,7 @@ func TestProcessErrPropagate(t *testing.T) {
 	input := make(chan int)
 	doFail := pl.NewSignal()
 
-	finished, cherr := pl.ProcessErr(ctx, numWorkers, input, func(x int) error {
+	finished, cherr := pl.Process(ctx, numWorkers, input, func(x int) error {
 		doFail.Wait()
 		return errTest
 	})

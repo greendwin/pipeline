@@ -6,35 +6,7 @@ import (
 	"sync/atomic"
 )
 
-func Transform[T any, U any](ctx context.Context, threads int, in <-chan T, cb func(T) U) <-chan U {
-	out := make(chan U)
-
-	var wg sync.WaitGroup
-	wg.Add(threads)
-
-	for range threads {
-		Go(ctx, func() {
-			defer wg.Done()
-
-			for {
-				v, ok := Read(ctx, in)
-				if !ok {
-					return
-				}
-
-				if !Write(ctx, out, cb(v)) {
-					return
-				}
-			}
-		})
-	}
-
-	closeAfterAll(ctx, &wg, nil, out)
-
-	return out
-}
-
-func TransformErr[T any, U any](ctx context.Context, threads int, in <-chan T, cb func(T) (U, error)) (<-chan U, Oneshot[error]) {
+func Transform[T any, U any](ctx context.Context, threads int, in <-chan T, cb func(T) (U, error)) (<-chan U, Oneshot[error]) {
 	out := make(chan U)
 	cherr := NewOneshotGroup[error](threads) // each worker can send one error
 
@@ -47,22 +19,28 @@ func TransformErr[T any, U any](ctx context.Context, threads int, in <-chan T, c
 		Go(ctx, func() {
 			defer wg.Done()
 
+			var err error
 			for {
-				v, ok := Read(ctx, in)
-				if !ok {
-					return
-				}
-
-				r, err := cb(v)
+				var v T
+				v, err = Read(ctx, in)
 				if err != nil {
-					cherr.Write(err)
-					hasError.Store(true)
-					return
+					break
 				}
 
-				if !Write(ctx, out, r) {
-					return
+				var r U
+				r, err = cb(v)
+				if err != nil {
+					break
 				}
+
+				if err = Write(ctx, out, r); err != nil {
+					break
+				}
+			}
+
+			if err != nil {
+				cherr.Write(err)
+				hasError.Store(true)
 			}
 		})
 	}
