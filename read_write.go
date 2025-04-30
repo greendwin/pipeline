@@ -61,7 +61,7 @@ func ReadErr[T any](ctx context.Context, in <-chan T, errs ...<-chan error) (T, 
 
 		if index+1 == len(cases) {
 			// `pp.done` was triggered
-			return empty, ErrChannelClosed
+			return empty, context.Cause(ctx)
 		}
 
 		if ok {

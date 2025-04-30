@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestWriteValues(t *testing.T) {
+func TestWrite(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
@@ -23,7 +23,7 @@ func TestWriteValues(t *testing.T) {
 	})
 }
 
-func TestWriteDontStuck(t *testing.T) {
+func TestWrite_DontStuck(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	neverRecv := make(chan int)
 
@@ -35,7 +35,7 @@ func TestWriteDontStuck(t *testing.T) {
 	checkShutdown(t, cancel)
 }
 
-func TestReadValue(t *testing.T) {
+func TestRead(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
@@ -59,7 +59,7 @@ func TestReadValue(t *testing.T) {
 	})
 }
 
-func TestReadNeverStuck(t *testing.T) {
+func TestRead_NeverStuck(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 
 	neverSend := make(chan int)
@@ -95,7 +95,7 @@ func TestReadErr(t *testing.T) {
 	checkSignaled(t, finished)
 }
 
-func TestReadErrFinishWithError(t *testing.T) {
+func TestReadErr_FinishWithError(t *testing.T) {
 	for index := range 10 {
 		t.Run(fmt.Sprintf("fail on errs[%d]", index), func(t *testing.T) {
 			ctx, cancel := pl.NewPipeline(context.Background())
@@ -125,7 +125,7 @@ func TestReadErrFinishWithError(t *testing.T) {
 	}
 }
 
-func TestReadErrReportChannelClosed(t *testing.T) {
+func TestReadErr_ReportChannelClosed(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
@@ -144,7 +144,7 @@ func TestReadErrReportChannelClosed(t *testing.T) {
 	checkSignaled(t, finished)
 }
 
-func TestReadErrErrorsCanClose(t *testing.T) {
+func TestReadErr_ErrorsCanClose(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
@@ -165,7 +165,7 @@ func TestReadErrErrorsCanClose(t *testing.T) {
 	checkSignaled(t, finished)
 }
 
-func TestReadErrReportCancelled(t *testing.T) {
+func TestReadErr_ReportCancelled(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 
 	res := make(chan int)
@@ -175,7 +175,7 @@ func TestReadErrReportCancelled(t *testing.T) {
 	finished := pl.NewSignal()
 	go func() {
 		_, err := pl.ReadErr(ctx, res, err1, err2)
-		assert.Equal(t, err, pl.ErrChannelClosed)
+		assert.ErrorIs(t, err, context.Canceled)
 		finished.Set()
 	}()
 
@@ -185,7 +185,7 @@ func TestReadErrReportCancelled(t *testing.T) {
 	checkSignaled(t, finished)
 }
 
-func TestReadErrFallbackToRead(t *testing.T) {
+func TestReadErr_FallbackToRead(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
@@ -212,7 +212,7 @@ func TestReadErrFallbackToRead(t *testing.T) {
 	checkSignaled(t, finished)
 }
 
-func TestReadErrReportWhanAllClosed(t *testing.T) {
+func TestReadErr_ReportWhanAllClosed(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
 	defer checkShutdown(t, cancel)
 
@@ -234,5 +234,23 @@ func TestReadErrReportWhanAllClosed(t *testing.T) {
 	checkPending(t, finished)
 
 	close(res)
+	checkSignaled(t, finished)
+}
+
+func TestReadErr_ReturnErrorCause(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+
+	neverSend := make(chan int)
+	neverFail := make(chan error)
+
+	finished := pl.NewSignal()
+	go func() {
+		_, err := pl.ReadErr(ctx, neverSend, neverFail)
+		assert.ErrorIs(t, err, errTest)
+		finished.Set()
+	}()
+
+	checkPending(t, finished)
+	cancel(errTest)
 	checkSignaled(t, finished)
 }

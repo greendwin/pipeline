@@ -260,9 +260,14 @@ func TestFanIn_NeverStuckOnSend(t *testing.T) {
 
 	merged, cherr := pl.FanIn(ctx, seq1, seq2, seq3)
 
+	withTimeout(t, "read single item", func() {
+		// read one item to make sure that cancel will be triggerred inside `FanIn`
+		_ = <-merged
+	})
+
 	checkShutdown(t, cancel)
 
-	checkPending(t, merged)
+	checkPending(t, merged) // should not be closed
 	err := checkRead(t, cherr)
 	assert.ErrorIs(t, err, context.Canceled)
 }
@@ -274,6 +279,11 @@ func TestFanIn_PropagateCause(t *testing.T) {
 	seq2 := sequence(ctx, 10, 3)
 
 	merged, cherr := pl.FanIn(ctx, seq1, seq2)
+
+	withTimeout(t, "read one item", func() {
+		// read one item to make sure that cancel will be inside `FanIn`
+		_ = <-merged
+	})
 
 	cancel(errTest)
 

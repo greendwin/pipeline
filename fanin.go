@@ -123,6 +123,8 @@ func FanIn[T any](ctx context.Context, in ...<-chan T) (<-chan T, Oneshot[error]
 
 			if ok {
 				if !Write(ctx, out, v.Interface().(T)) {
+					// `ctx.Done()` was triggered
+					cherr.Write(context.Cause(ctx))
 					return
 				}
 				continue
