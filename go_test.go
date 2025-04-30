@@ -13,7 +13,7 @@ var errTest = errors.New("test")
 
 func TestPipelineGo(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	started := pl.NewSignal()
 	pl.Go(ctx, func() {
@@ -25,7 +25,7 @@ func TestPipelineGo(t *testing.T) {
 
 func TestPipelineGoErr(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	started := pl.NewSignal()
 	exit := pl.NewSignal()
@@ -56,7 +56,7 @@ func TestPipelineShutdownGoErr(t *testing.T) {
 
 	shutdownFinished := pl.NewSignal()
 	go func() {
-		pl.Shutdown(ctx, cancel)
+		cancel()
 		shutdownFinished.Set()
 	}()
 

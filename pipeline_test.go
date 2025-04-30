@@ -23,11 +23,11 @@ func withTimeout(t *testing.T, context string, cb func()) {
 	}
 }
 
-func checkShutdown(t *testing.T, ctx context.Context, cancel context.CancelFunc) {
+func checkShutdown(t *testing.T, cancel context.CancelFunc) {
 	t.Helper()
 
 	withTimeout(t, "pipline shutdown", func() {
-		pl.Shutdown(ctx, cancel)
+		cancel()
 	})
 }
 
@@ -62,7 +62,7 @@ func TestPipelineShutdown(t *testing.T) {
 
 	shutdownFinished := pl.NewSignal()
 	go func() {
-		pl.Shutdown(ctx, cancel)
+		cancel()
 		shutdownFinished.Set()
 	}()
 

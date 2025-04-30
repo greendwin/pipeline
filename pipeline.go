@@ -5,24 +5,26 @@ import (
 	"sync"
 )
 
-type contextKey int
-
-const waitGroupKey contextKey = 0
-
 func NewPipeline(parent context.Context) (context.Context, context.CancelFunc) {
-	ctxWg := context.WithValue(parent, waitGroupKey, &sync.WaitGroup{})
-	return context.WithCancel(ctxWg)
+	wg := &sync.WaitGroup{}
+	ctxWg := context.WithValue(parent, waitGroupKey, wg)
+	ctx, cancel := context.WithCancel(ctxWg)
+
+	// wait goroutines shutdown on cancel
+	return ctx, func() {
+		shutdown(wg, cancel)
+	}
 }
 
 // stop entire pipeline and make sure that all waiting goroutines are unblocked and exited
-func Shutdown(ctx context.Context, cancel context.CancelFunc) {
-	wg := getWaitGroup(ctx)
-	if !wg.IsValid() {
-		panic("context must be create with `NewPipeline")
-	}
+func shutdown(wg *sync.WaitGroup, cancel context.CancelFunc) {
 	cancel()
 	wg.Wait()
 }
+
+type contextKey int
+
+const waitGroupKey contextKey = 0
 
 func getWaitGroup(ctx context.Context) (opt optWaitGroup) {
 	r := ctx.Value(waitGroupKey)

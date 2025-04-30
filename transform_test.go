@@ -21,7 +21,7 @@ func sequence(ctx context.Context, start, count int) <-chan int {
 
 func TestTransform(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	seq := sequence(ctx, 0, 10)
 	seqAdd5 := pl.Transform(ctx, 1, seq, func(x int) int {
@@ -40,7 +40,7 @@ func TestTransform(t *testing.T) {
 
 func TestTransform_SpawnWorkers(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	numWorkers := 42
 
@@ -82,7 +82,7 @@ func TestTransform_SpawnWorkers(t *testing.T) {
 
 func TestTransformErr(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	seq := sequence(ctx, 0, 10)
 	seqAdd5, cherr := pl.TransformErr(ctx, 1, seq, func(x int) (int, error) {
@@ -103,7 +103,7 @@ func TestTransformErr(t *testing.T) {
 
 func TestTransformErr_SpawnWorkers(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	numWorkers := 42
 
@@ -173,5 +173,5 @@ func TestTransformErr_Propagate(t *testing.T) {
 
 	// note: multiple errors were emitted simultaneously,
 	// make sure that no goroutine was stuck
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 }

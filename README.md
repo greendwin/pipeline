@@ -25,11 +25,11 @@ The repository contains several examples:
 ```go
 ctx, cancel := pipeline.NewPipeline(context.Background())
 
-// run `cancel` and wait all spawned goroutines to finish
-defer pipeline.Shutdown(ctx, cancel)
+// wait all spawned goroutines to finish
+defer cancel()
 ```
 
-It is optional, so you can create a pipeline without it if goroutine tracking is not needed.
+It is optional, so you can use any `context.Context` to create a pipeline if goroutine tracking is not needed.
 
 
 ### Generate

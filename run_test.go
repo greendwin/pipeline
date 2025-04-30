@@ -10,7 +10,7 @@ import (
 
 func TestRun(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	processed := pl.NewSignal()
 	finished := pl.Run(ctx, func() {
@@ -24,7 +24,7 @@ func TestRun(t *testing.T) {
 
 func TestRunErr(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	processed := pl.NewSignal()
 	finished, cherr := pl.RunErr(ctx, func() error {
@@ -41,7 +41,7 @@ func TestRunErr(t *testing.T) {
 
 func TestRunErr_PropagateError(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	doFail := pl.NewSignal()
 	finished, cherr := pl.RunErr(ctx, func() error {

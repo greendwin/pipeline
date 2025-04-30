@@ -11,7 +11,7 @@ import (
 
 func TestWriteValues(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	recv := make(chan int, 10)
 
@@ -32,12 +32,12 @@ func TestWriteDontStuck(t *testing.T) {
 		assert.False(t, ok)
 	})
 
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 }
 
 func TestReadValue(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	vals := make(chan int, 10)
 	for k := range cap(vals) {
@@ -71,13 +71,13 @@ func TestReadNeverStuck(t *testing.T) {
 		finished.Set()
 	})
 
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 	checkSignaled(t, finished)
 }
 
 func TestReadErr(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	res := make(chan int)
 
@@ -99,7 +99,7 @@ func TestReadErrFinishWithError(t *testing.T) {
 	for index := range 10 {
 		t.Run(fmt.Sprintf("fail on errs[%d]", index), func(t *testing.T) {
 			ctx, cancel := pl.NewPipeline(context.Background())
-			defer checkShutdown(t, ctx, cancel)
+			defer checkShutdown(t, cancel)
 
 			res := make(chan int)
 
@@ -127,7 +127,7 @@ func TestReadErrFinishWithError(t *testing.T) {
 
 func TestReadErrReportChannelClosed(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	res := make(chan int)
 
@@ -146,7 +146,7 @@ func TestReadErrReportChannelClosed(t *testing.T) {
 
 func TestReadErrErrorsCanClose(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	res := make(chan int)
 
@@ -180,14 +180,14 @@ func TestReadErrReportCancelled(t *testing.T) {
 	}()
 
 	checkPending(t, finished)
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 
 	checkSignaled(t, finished)
 }
 
 func TestReadErrFallbackToRead(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	res := make(chan int)
 	err1 := make(chan error)
@@ -214,7 +214,7 @@ func TestReadErrFallbackToRead(t *testing.T) {
 
 func TestReadErrReportWhanAllClosed(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	res := make(chan int)
 	err1 := make(chan error)

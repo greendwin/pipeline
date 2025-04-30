@@ -105,7 +105,7 @@ func main() {
 	ctx, cancel := pipeline.NewPipeline(context.Background())
 	defer func() {
 		log.Println("shutting down...")
-		pipeline.Shutdown(ctx, cancel)
+		cancel()
 		log.Println("shutdown finished")
 	}()
 

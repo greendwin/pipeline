@@ -13,7 +13,7 @@ func TestWaitFirst(t *testing.T) {
 	for index := range 10 {
 		t.Run(fmt.Sprintf("FirstRecv(%d)", index), func(t *testing.T) {
 			ctx, cancel := pl.NewPipeline(context.Background())
-			defer checkShutdown(t, ctx, cancel)
+			defer checkShutdown(t, cancel)
 
 			opts := make([]chan int, 10)
 			optsIn := make([]<-chan int, len(opts))
@@ -51,13 +51,13 @@ func TestWaitFirst_NeverStuck(t *testing.T) {
 		finished.Set()
 	}()
 
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 	checkSignaled(t, finished)
 }
 
 func TestWaitFirst_IgnoreClosedChannels(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	willClose1 := make(chan int)
 	willClose2 := make(chan int)
@@ -83,7 +83,7 @@ func TestWaitFirst_IgnoreClosedChannels(t *testing.T) {
 
 func TestWaitFirst_ReturnNoneWhenAllClosed(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	willClose1 := make(chan int)
 	willClose2 := make(chan int)
@@ -104,7 +104,7 @@ func TestWaitFirst_ReturnNoneWhenAllClosed(t *testing.T) {
 
 func TestFirst(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	opts := make([]chan int, 10)
 	optsIn := make([]<-chan int, len(opts))
@@ -133,7 +133,7 @@ func TestFirst(t *testing.T) {
 }
 func TestFirst_AllClosed(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	willClose1 := make(chan int)
 	willClose2 := make(chan int)
@@ -150,7 +150,7 @@ func TestFirst_AllClosed(t *testing.T) {
 
 func TestFanIn(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	seq1 := sequence(ctx, 0, 10)
 	seq2 := sequence(ctx, 10, 3)
@@ -186,7 +186,7 @@ func TestFanIn_NeverStuckOnRecv(t *testing.T) {
 		finished.Set()
 	}()
 
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 	checkSignaled(t, finished)
 }
 
@@ -199,6 +199,6 @@ func TestFanIn_NeverStuckOnSend(t *testing.T) {
 
 	merged := pl.FanIn(ctx, seq1, seq2, seq3)
 
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 	checkSignaled(t, merged)
 }

@@ -10,7 +10,7 @@ import (
 
 func TestGenerate(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	squares := pl.Generate(ctx, func(wr pl.Writer[int]) {
 		for k := range 10 {
@@ -40,13 +40,13 @@ func TestGenerateDontStuck(t *testing.T) {
 		finished.Set()
 	})
 
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 	checkSignaled(t, finished)
 }
 
 func TestGenerateErr(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	finished := pl.NewSignal()
 	squares, cherr := pl.GenerateErr(ctx, func(wr pl.Writer[int]) error {
@@ -72,7 +72,7 @@ func TestGenerateErr(t *testing.T) {
 
 func TestGenerateErrPropagate(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	partial, cherr := pl.GenerateErr(ctx, func(wr pl.Writer[int]) error {
 		for k := range 5 {
@@ -111,7 +111,7 @@ func TestGenerateErrDontStuck(t *testing.T) {
 	})
 
 	// shutdown execution to unblock write
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 
 	checkPending(t, cherr)
 	checkSignaled(t, finished)

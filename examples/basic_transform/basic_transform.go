@@ -51,6 +51,6 @@ func main() {
 	}
 
 	log.Println("shutting down...")
-	pipeline.Shutdown(ctx, cancel)
+	cancel()
 	log.Println("done.")
 }

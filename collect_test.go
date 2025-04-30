@@ -10,7 +10,7 @@ import (
 
 func TestCollect(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	nums := sequence(ctx, 0, 10)
 	sum := pl.Collect(ctx, func() int {
@@ -43,13 +43,13 @@ func TestCollect_DontStuck(t *testing.T) {
 		return sum
 	})
 
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 	_ = checkRead(t, sum)
 }
 
 func TestCollectErr(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	nums := sequence(ctx, 0, 10)
 	sum, cherr := pl.CollectErr(ctx, func() (int, error) {
@@ -83,7 +83,7 @@ func TestCollectErr_PropagateError(t *testing.T) {
 	err := checkRead(t, cherr)
 	assert.Equal(t, err, errTest)
 
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 
 	// oneshot never closed
 	checkPending(t, sum)

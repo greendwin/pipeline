@@ -28,7 +28,7 @@ func (a *adder) Value() int {
 
 func TestProcess(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	sum := adder{}
 
@@ -43,7 +43,7 @@ func TestProcess(t *testing.T) {
 
 func TestProcessSpawnWorkers(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	numWorkers := 42
 
@@ -74,7 +74,7 @@ func TestProcessSpawnWorkers(t *testing.T) {
 
 func TestProcessErr(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	sum := adder{}
 
@@ -92,7 +92,7 @@ func TestProcessErr(t *testing.T) {
 
 func TestProcessErrSpawnWorkers(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
-	defer checkShutdown(t, ctx, cancel)
+	defer checkShutdown(t, cancel)
 
 	numWorkers := 42
 
@@ -152,5 +152,5 @@ func TestProcessErrPropagate(t *testing.T) {
 
 	// note: multiple errors were emitted simultaneously,
 	// make sure that no goroutine was stuck
-	checkShutdown(t, ctx, cancel)
+	checkShutdown(t, cancel)
 }
