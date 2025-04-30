@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"errors"
 	"reflect"
 )
 
@@ -24,8 +23,6 @@ func Read[T any](ctx context.Context, in <-chan T) (val T, ok bool) {
 		return
 	}
 }
-
-var ErrChannelClosed = errors.New("channel closed")
 
 // read either a channel value or an error from the first triggered channel
 //

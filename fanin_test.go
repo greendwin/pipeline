@@ -25,8 +25,8 @@ func TestWaitFirst(t *testing.T) {
 
 			finished := pl.NewSignal()
 			go func() {
-				v, ok := pl.WaitFirst(ctx, optsIn...)
-				assert.True(t, ok)
+				v, err := pl.WaitFirst(ctx, optsIn...)
+				assert.Nil(t, err)
 				assert.Equal(t, v, 42)
 				finished.Set()
 			}()
@@ -46,8 +46,8 @@ func TestWaitFirst_NeverStuck(t *testing.T) {
 
 	finished := pl.NewSignal()
 	go func() {
-		_, ok := pl.WaitFirst(ctx, neverSend1, neverSend2)
-		assert.False(t, ok)
+		_, err := pl.WaitFirst(ctx, neverSend1, neverSend2)
+		assert.ErrorIs(t, err, context.Canceled)
 		finished.Set()
 	}()
 
@@ -65,8 +65,8 @@ func TestWaitFirst_IgnoreClosedChannels(t *testing.T) {
 
 	finished := pl.NewSignal()
 	go func() {
-		v, ok := pl.WaitFirst(ctx, willClose1, willClose2, willSend)
-		assert.True(t, ok)
+		v, err := pl.WaitFirst(ctx, willClose1, willClose2, willSend)
+		assert.Nil(t, err)
 		assert.Equal(t, v, 42)
 		finished.Set()
 	}()
@@ -90,8 +90,8 @@ func TestWaitFirst_ReturnNoneWhenAllClosed(t *testing.T) {
 
 	finished := pl.NewSignal()
 	go func() {
-		_, ok := pl.WaitFirst(ctx, willClose1, willClose2)
-		assert.False(t, ok)
+		_, err := pl.WaitFirst(ctx, willClose1, willClose2)
+		assert.ErrorIs(t, err, pl.ErrChannelClosed)
 		finished.Set()
 	}()
 
@@ -99,6 +99,24 @@ func TestWaitFirst_ReturnNoneWhenAllClosed(t *testing.T) {
 	checkPending(t, finished)
 
 	close(willClose2)
+	checkSignaled(t, finished)
+}
+
+func TestWaitFirst_ReturnCauseError(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+
+	ch1 := make(chan int)
+	ch2 := make(chan int)
+
+	finished := pl.NewSignal()
+	go func() {
+		_, err := pl.WaitFirst(ctx, ch1, ch2)
+		assert.ErrorIs(t, err, errTest)
+		finished.Set()
+	}()
+
+	checkPending(t, finished)
+	cancel(errTest)
 	checkSignaled(t, finished)
 }
 
@@ -114,7 +132,7 @@ func TestFirst(t *testing.T) {
 		optsIn[k] = ch
 	}
 
-	res := pl.First(ctx, optsIn...)
+	res, cherr := pl.First(ctx, optsIn...)
 	checkPending(t, res)
 
 	close(opts[4])
@@ -130,6 +148,8 @@ func TestFirst(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, v, 42)
 	})
+
+	checkPending(t, cherr) // no errors
 }
 func TestFirst_AllClosed(t *testing.T) {
 	ctx, cancel := pl.NewPipeline(context.Background())
@@ -138,7 +158,7 @@ func TestFirst_AllClosed(t *testing.T) {
 	willClose1 := make(chan int)
 	willClose2 := make(chan int)
 
-	res := pl.First(ctx, willClose1, willClose2)
+	res, cherr := pl.First(ctx, willClose1, willClose2)
 	checkPending(t, res)
 
 	close(willClose1)
@@ -146,6 +166,49 @@ func TestFirst_AllClosed(t *testing.T) {
 
 	close(willClose2)
 	checkPending(t, res) // still pending, `Oneshot` channels are never closed
+
+	err := checkRead(t, cherr)
+	assert.ErrorIs(t, err, pl.ErrChannelClosed)
+}
+
+func TestFirstErr(t *testing.T) {
+	for _, first := range [...]bool{true, false} {
+		ctx, cancel := pl.NewPipeline(context.Background())
+		defer checkShutdown(t, cancel)
+
+		cherr1 := pl.NewOneshot[error]()
+		cherr2 := pl.NewOneshot[error]()
+
+		cherr := pl.FirstErr(ctx, cherr1.Chan(), cherr2.Chan())
+		checkPending(t, cherr)
+
+		if first {
+			cherr1.Write(errTest)
+		} else {
+			cherr2.Write(errTest)
+		}
+
+		err := checkRead(t, cherr)
+		assert.ErrorIs(t, err, errTest)
+	}
+}
+
+func TestFirstErr_AllClosed(t *testing.T) {
+	ctx, cancel := pl.NewPipeline(context.Background())
+	defer checkShutdown(t, cancel)
+
+	willClose1 := make(chan error)
+	willClose2 := make(chan error)
+
+	cherr := pl.FirstErr(ctx, willClose1, willClose2)
+
+	close(willClose1)
+	checkPending(t, cherr) // wait second channel
+
+	close(willClose2)
+
+	err := checkRead(t, cherr)
+	assert.ErrorIs(t, err, pl.ErrChannelClosed)
 }
 
 func TestFanIn(t *testing.T) {

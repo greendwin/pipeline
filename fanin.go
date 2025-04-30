@@ -2,10 +2,16 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"reflect"
 )
 
-func WaitFirst[T any](ctx context.Context, in ...<-chan T) (T, bool) {
+var ErrChannelClosed = errors.New("channel closed")
+
+// return first value ignoring closed channels
+// if all `in` channels are closed, return `ErrChannelClosed`
+// return `context.Cause(ctx)` in case of cancellation
+func WaitFirst[T any](ctx context.Context, in ...<-chan T) (T, error) {
 	var cases []reflect.SelectCase
 	if len(in) <= 3 {
 		cases = make([]reflect.SelectCase, len(in)+1, 4) // stack allocate
@@ -25,19 +31,19 @@ func WaitFirst[T any](ctx context.Context, in ...<-chan T) (T, bool) {
 		idx, v, ok := reflect.Select(cases)
 
 		if idx+1 == len(cases) {
-			// `ctx.done` was triggered
+			// `ctx.Done()` was triggered
 			var empty T
-			return empty, false
+			return empty, context.Cause(ctx)
 		}
 
 		if ok {
-			return v.Interface().(T), true
+			return v.Interface().(T), nil
 		}
 
 		if len(cases) == 2 {
 			// removing the last case, only `ctx.done` remains
 			var empty T
-			return empty, false
+			return empty, ErrChannelClosed
 		}
 
 		// remove closed channel
@@ -45,21 +51,43 @@ func WaitFirst[T any](ctx context.Context, in ...<-chan T) (T, bool) {
 	}
 }
 
-func First[T any](ctx context.Context, in ...<-chan T) Oneshot[T] {
+func First[T any](ctx context.Context, in ...<-chan T) (Oneshot[T], Oneshot[error]) {
 	out := NewOneshot[T]()
+	cherr := NewOneshot[error]()
 
 	wg := getWaitGroup(ctx)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 
-		v, ok := WaitFirst(ctx, in...)
-		if ok {
+		v, err := WaitFirst(ctx, in...)
+		if err != nil {
+			cherr.Write(err)
+		} else {
 			out.Write(v)
 		}
 	}()
 
-	return out.Chan()
+	return out.Chan(), cherr.Chan()
+}
+
+func FirstErr(ctx context.Context, errs ...<-chan error) Oneshot[error] {
+	cherr := NewOneshot[error]()
+
+	wg := getWaitGroup(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		err, waitErr := WaitFirst(ctx, errs...)
+		if waitErr != nil {
+			cherr.Write(waitErr)
+		} else {
+			cherr.Write(err)
+		}
+	}()
+
+	return cherr.Chan()
 }
 
 func FanIn[T any](ctx context.Context, in ...<-chan T) <-chan T {
@@ -71,7 +99,13 @@ func FanIn[T any](ctx context.Context, in ...<-chan T) <-chan T {
 		defer wg.Done()
 		defer close(out)
 
-		cases := make([]reflect.SelectCase, len(in)+1)
+		var cases []reflect.SelectCase
+		if len(in) <= 3 {
+			cases = make([]reflect.SelectCase, len(in)+1, 4)
+		} else {
+			cases = make([]reflect.SelectCase, len(in)+1)
+		}
+
 		for k, ch := range in {
 			cases[k].Dir = reflect.SelectRecv
 			cases[k].Chan = reflect.ValueOf(ch)
@@ -82,7 +116,7 @@ func FanIn[T any](ctx context.Context, in ...<-chan T) <-chan T {
 		for {
 			idx, v, ok := reflect.Select(cases)
 			if idx+1 == len(cases) {
-				// `ctx.done` was triggered
+				// `ctx.Done()` was triggered
 				return
 			}
 

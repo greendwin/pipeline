@@ -126,7 +126,12 @@ case <-finished:
 ## History
 
 ### v0.2.0 (WIP)
-* Get rid of `pipeline.Shutdown`, embed its behavior into `cancel` function.
+Get rid of `pipeline.Shutdown`, embed its behavior into `cancel` function.
 
+Return `context.Cause(ctx)` on pipeline cancellation:
+* `WaitFirst` - return `T, error` instead of `T, bool`
+* `First` - return `Oneshot[T], Oneshot[error]` pair, so it can fail now
+* add `FirstErr` for waiting for error channels
+  
 ### v0.1.0
 * Initial version based on `context.Context`.
