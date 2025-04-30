@@ -121,3 +121,12 @@ case <-finished:
     log.Println("done.")
 }
 ```
+
+
+## History
+
+### v0.2.0 (WIP)
+* Get rid of `pipeline.Shutdown`, embed its behavior into `cancel` function.
+
+### v0.1.0
+* Initial version based on `context.Context`.
