@@ -219,7 +219,7 @@ func TestFanIn(t *testing.T) {
 	seq2 := sequence(ctx, 10, 3)
 	seq3 := sequence(ctx, 13, 7)
 
-	merged := pl.FanIn(ctx, seq1, seq2, seq3)
+	merged, cherr := pl.FanIn(ctx, seq1, seq2, seq3)
 
 	withTimeout(t, "read merged channel", func() {
 		received := make([]bool, 20)
@@ -231,6 +231,8 @@ func TestFanIn(t *testing.T) {
 			assert.True(t, ok, "k=", k)
 		}
 	})
+
+	checkPending(t, cherr) // no errors
 }
 
 func TestFanIn_NeverStuckOnRecv(t *testing.T) {
@@ -240,17 +242,13 @@ func TestFanIn_NeverStuckOnRecv(t *testing.T) {
 	neverSend2 := make(chan int)
 	neverSend3 := make(chan int)
 
-	merged := pl.FanIn(ctx, neverSend1, neverSend2, neverSend3)
-
-	finished := pl.NewSignal()
-	go func() {
-		_, ok := <-merged
-		assert.False(t, ok)
-		finished.Set()
-	}()
+	merged, cherr := pl.FanIn(ctx, neverSend1, neverSend2, neverSend3)
 
 	checkShutdown(t, cancel)
-	checkSignaled(t, finished)
+
+	checkPending(t, merged)
+	err := checkRead(t, cherr)
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestFanIn_NeverStuckOnSend(t *testing.T) {
@@ -260,8 +258,27 @@ func TestFanIn_NeverStuckOnSend(t *testing.T) {
 	seq2 := sequence(ctx, 10, 3)
 	seq3 := sequence(ctx, 13, 7)
 
-	merged := pl.FanIn(ctx, seq1, seq2, seq3)
+	merged, cherr := pl.FanIn(ctx, seq1, seq2, seq3)
 
 	checkShutdown(t, cancel)
-	checkSignaled(t, merged)
+
+	checkPending(t, merged)
+	err := checkRead(t, cherr)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestFanIn_PropagateCause(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+
+	seq1 := sequence(ctx, 0, 10)
+	seq2 := sequence(ctx, 10, 3)
+
+	merged, cherr := pl.FanIn(ctx, seq1, seq2)
+
+	cancel(errTest)
+
+	err := checkRead(t, cherr)
+	assert.ErrorIs(t, err, errTest)
+
+	checkPending(t, merged) // would not close
 }

@@ -90,14 +90,14 @@ func FirstErr(ctx context.Context, errs ...<-chan error) Oneshot[error] {
 	return cherr.Chan()
 }
 
-func FanIn[T any](ctx context.Context, in ...<-chan T) <-chan T {
+func FanIn[T any](ctx context.Context, in ...<-chan T) (<-chan T, Oneshot[error]) {
 	out := make(chan T)
+	cherr := NewOneshot[error]()
 
 	wg := getWaitGroup(ctx)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(out)
 
 		var cases []reflect.SelectCase
 		if len(in) <= 3 {
@@ -117,6 +117,7 @@ func FanIn[T any](ctx context.Context, in ...<-chan T) <-chan T {
 			idx, v, ok := reflect.Select(cases)
 			if idx+1 == len(cases) {
 				// `ctx.Done()` was triggered
+				cherr.Write(context.Cause(ctx))
 				return
 			}
 
@@ -128,14 +129,16 @@ func FanIn[T any](ctx context.Context, in ...<-chan T) <-chan T {
 			}
 
 			if len(cases) == 2 {
-				// last input channel was closed, only `ctx.done` left
+				// last input channel was closed, so close output channel
+				// note: only `ctx.Done()` is left
+				close(out)
 				return
 			}
 
-			// drop closed channel
+			// drop closed channel from select
 			cases = append(cases[:idx], cases[idx+1:]...)
 		}
 	}()
 
-	return out
+	return out, cherr.Chan()
 }

@@ -113,8 +113,8 @@ func main() {
 	urls2, urlsErr2 := pipeline.GenerateErr(ctx, collect(ctx, "www.bar.com"))
 	urls3, urlsErr3 := pipeline.GenerateErr(ctx, collect(ctx, "www.quz.com"))
 
-	urls := pipeline.FanIn(ctx, urls1, urls2, urls3)
-	urlsErr := pipeline.FirstErr(ctx, urlsErr1, urlsErr2, urlsErr3)
+	urls, urlsFanErr := pipeline.FanIn(ctx, urls1, urls2, urls3)
+	urlsErr := pipeline.FirstErr(ctx, urlsErr1, urlsErr2, urlsErr3, urlsFanErr)
 
 	cont, contErr := pipeline.TransformErr(ctx, 5, urls, download)
 	stats, statsErr := pipeline.TransformErr(ctx, 2, cont, getStats)
